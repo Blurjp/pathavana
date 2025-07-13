@@ -7,7 +7,8 @@
 
 import '@testing-library/jest-dom';
 import { configure } from '@testing-library/react';
-import { server } from './tests/utils/mockServer';
+import React from 'react';
+// import { server } from './tests/utils/mockServer';
 
 // Configure React Testing Library
 configure({
@@ -24,9 +25,9 @@ configure({
 // Global test setup
 beforeAll(() => {
   // Start MSW server for API mocking
-  server.listen({
-    onUnhandledRequest: 'warn',
-  });
+  // server.listen({
+  //   onUnhandledRequest: 'warn',
+  // });
   
   // Mock console methods to reduce noise in tests
   global.console = {
@@ -42,7 +43,7 @@ beforeAll(() => {
 
 // Reset handlers after each test
 afterEach(() => {
-  server.resetHandlers();
+  // server.resetHandlers();
   
   // Clear all mocks
   jest.clearAllMocks();
@@ -56,7 +57,7 @@ afterEach(() => {
 
 // Clean up after all tests
 afterAll(() => {
-  server.close();
+  // server.close();
 });
 
 // Mock IntersectionObserver
@@ -158,7 +159,7 @@ class TestErrorBoundary extends React.Component {
 
   render() {
     if ((this.state as any).hasError) {
-      return <div data-testid="error-boundary">Something went wrong.</div>;
+      return React.createElement('div', { 'data-testid': 'error-boundary' }, 'Something went wrong.');
     }
 
     return (this.props as any).children;
