@@ -1,0 +1,63 @@
+# Core FastAPI and web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Database and ORM
+sqlalchemy==2.0.23
+alembic==1.13.1
+
+# For SQLite (development)
+aiosqlite==0.19.0
+
+# For PostgreSQL (production) - optional
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+
+# Authentication and security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+email-validator==2.1.0
+
+# Email sending
+aiosmtplib==3.0.1
+jinja2==3.1.2
+
+# AI and LLM integration
+openai==1.6.1
+anthropic==0.7.0
+langchain==0.0.350
+
+# External API integrations
+aiohttp==3.9.1
+requests==2.31.0
+httpx==0.25.2
+
+# Data processing and utilities
+python-dateutil==2.8.2
+fuzzywuzzy==0.18.0
+python-Levenshtein==0.23.0
+
+# File handling and caching
+aiofiles==23.2.1
+redis==5.0.1
+
+# Development and testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+
+# Utilities
+python-dotenv==1.0.0
+typing-extensions==4.8.0
+
+# Production server
+gunicorn==21.2.0
+
+# Additional dependencies for full functionality
+starlette==0.27.0
+click==8.1.7
+h11==0.14.0
+greenlet==3.0.1

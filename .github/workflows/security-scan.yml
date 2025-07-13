@@ -1,0 +1,434 @@
+name: Security Scanning
+
+on:
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  # Dependency vulnerability scanning
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        component: [backend, frontend]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python (for backend)
+      if: matrix.component == 'backend'
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Set up Node.js (for frontend)
+      if: matrix.component == 'frontend'
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    # Backend dependency scanning
+    - name: Install Python dependencies
+      if: matrix.component == 'backend'
+      run: |
+        cd backend
+        pip install -r requirements.txt
+        pip install safety pip-audit
+
+    - name: Run Python safety check
+      if: matrix.component == 'backend'
+      run: |
+        cd backend
+        safety check --json --output safety-report.json || true
+        pip-audit --format=json --output=pip-audit-report.json || true
+
+    - name: Run Snyk Python scan
+      if: matrix.component == 'backend'
+      uses: snyk/actions/python@master
+      continue-on-error: true
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: --file=backend/requirements.txt --json-file-output=snyk-python-report.json
+
+    # Frontend dependency scanning
+    - name: Install Node.js dependencies
+      if: matrix.component == 'frontend'
+      run: |
+        cd frontend
+        npm ci
+
+    - name: Run npm audit
+      if: matrix.component == 'frontend'
+      run: |
+        cd frontend
+        npm audit --audit-level=moderate --json > npm-audit-report.json || true
+
+    - name: Run Snyk Node.js scan
+      if: matrix.component == 'frontend'
+      uses: snyk/actions/node@master
+      continue-on-error: true
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: --file=frontend/package.json --json-file-output=snyk-node-report.json
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-reports-${{ matrix.component }}
+        path: |
+          **/*-report.json
+        retention-days: 30
+
+  # Static Application Security Testing (SAST)
+  sast-scan:
+    name: Static Application Security Testing
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # CodeQL Analysis
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: python, javascript
+        queries: security-and-quality
+
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v2
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        category: "/language:python"
+
+    # Semgrep SAST
+    - name: Run Semgrep
+      uses: semgrep/semgrep-action@v1
+      with:
+        config: >-
+          p/security-audit
+          p/secrets
+          p/owasp-top-ten
+          p/python
+          p/javascript
+        generateSarif: "1"
+
+    - name: Upload Semgrep results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: semgrep.sarif
+
+    # Bandit for Python security
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install Bandit
+      run: pip install bandit[toml]
+
+    - name: Run Bandit
+      run: |
+        bandit -r backend/app -f json -o bandit-report.json || true
+        bandit -r backend/app -f sarif -o bandit-report.sarif || true
+
+    - name: Upload Bandit SARIF
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: bandit-report.sarif
+
+    # ESLint security for JavaScript/TypeScript
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        npm ci
+        npm install eslint-plugin-security @typescript-eslint/eslint-plugin
+
+    - name: Run ESLint security scan
+      run: |
+        cd frontend
+        npx eslint . --ext .js,.jsx,.ts,.tsx --format=json --output-file=eslint-security-report.json || true
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: sast-reports
+        path: |
+          *-report.json
+          *-report.sarif
+        retention-days: 30
+
+  # Secrets scanning
+  secrets-scan:
+    name: Secrets Scanning
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for secret scanning
+
+    - name: Run TruffleHog
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified
+
+    - name: Run GitLeaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Run detect-secrets
+      run: |
+        pip install detect-secrets
+        detect-secrets scan --all-files --baseline .secrets.baseline || true
+        detect-secrets audit .secrets.baseline || true
+
+  # Container security scanning
+  container-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'  # Skip for scheduled runs to avoid building images
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build backend image for scanning
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        file: ./backend/Dockerfile
+        target: production
+        push: false
+        tags: pathavana-backend:scan
+        load: true
+
+    - name: Build frontend image for scanning
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        file: ./frontend/Dockerfile
+        target: nginx-production
+        push: false
+        tags: pathavana-frontend:scan
+        load: true
+
+    - name: Run Trivy scan on backend
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'pathavana-backend:scan'
+        format: 'sarif'
+        output: 'trivy-backend-results.sarif'
+
+    - name: Run Trivy scan on frontend
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'pathavana-frontend:scan'
+        format: 'sarif'
+        output: 'trivy-frontend-results.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-backend-results.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-frontend-results.sarif'
+
+    # Grype vulnerability scanner
+    - name: Run Grype scan
+      uses: anchore/scan-action@v3
+      with:
+        image: "pathavana-backend:scan"
+        fail-build: false
+        severity-cutoff: high
+
+    - name: Upload Grype results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: results.sarif
+
+  # Infrastructure scanning
+  infrastructure-scan:
+    name: Infrastructure Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Terraform security scanning
+    - name: Run tfsec
+      uses: aquasecurity/tfsec-sarif-action@v0.1.4
+      with:
+        sarif_file: tfsec.sarif
+
+    - name: Upload tfsec results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: tfsec.sarif
+
+    # Kubernetes security scanning
+    - name: Run Checkov on Kubernetes manifests
+      uses: bridgecrewio/checkov-action@master
+      with:
+        directory: k8s/
+        framework: kubernetes
+        output_format: sarif
+        output_file_path: checkov-k8s.sarif
+
+    - name: Upload Checkov results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: checkov-k8s.sarif
+
+    # Docker Compose security scanning
+    - name: Run Checkov on Docker Compose
+      uses: bridgecrewio/checkov-action@master
+      with:
+        file: docker-compose.yml,docker-compose.prod.yml
+        framework: docker_compose
+        output_format: sarif
+        output_file_path: checkov-docker.sarif
+
+    - name: Upload Checkov Docker results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: checkov-docker.sarif
+
+  # License compliance scanning
+  license-scan:
+    name: License Compliance Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    # Python license scanning
+    - name: Install Python dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt
+        pip install pip-licenses
+
+    - name: Check Python licenses
+      run: |
+        cd backend
+        pip-licenses --format=json --output-file=python-licenses.json
+        pip-licenses --format=csv --output-file=python-licenses.csv
+
+    # Node.js license scanning
+    - name: Install Node.js dependencies
+      run: |
+        cd frontend
+        npm ci
+        npm install -g license-checker
+
+    - name: Check Node.js licenses
+      run: |
+        cd frontend
+        license-checker --json --out node-licenses.json
+        license-checker --csv --out node-licenses.csv
+
+    - name: Upload license reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: license-reports
+        path: |
+          backend/python-licenses.*
+          frontend/node-licenses.*
+        retention-days: 30
+
+  # Security report aggregation
+  security-report:
+    name: Security Report Summary
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, sast-scan, secrets-scan, container-scan, infrastructure-scan, license-scan]
+    if: always()
+
+    steps:
+    - name: Download all security reports
+      uses: actions/download-artifact@v3
+
+    - name: Generate security summary
+      run: |
+        echo "# Security Scan Summary" > security-summary.md
+        echo "Date: $(date)" >> security-summary.md
+        echo "" >> security-summary.md
+        
+        echo "## Scan Results" >> security-summary.md
+        echo "- Dependency Scan: ${{ needs.dependency-scan.result }}" >> security-summary.md
+        echo "- SAST Scan: ${{ needs.sast-scan.result }}" >> security-summary.md
+        echo "- Secrets Scan: ${{ needs.secrets-scan.result }}" >> security-summary.md
+        echo "- Container Scan: ${{ needs.container-scan.result }}" >> security-summary.md
+        echo "- Infrastructure Scan: ${{ needs.infrastructure-scan.result }}" >> security-summary.md
+        echo "- License Scan: ${{ needs.license-scan.result }}" >> security-summary.md
+
+    - name: Upload security summary
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-summary
+        path: security-summary.md
+        retention-days: 90
+
+    - name: Notify security team
+      if: needs.dependency-scan.result == 'failure' || needs.sast-scan.result == 'failure' || needs.secrets-scan.result == 'failure'
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        text: "🚨 Security scan found critical issues that require immediate attention"
+        channel: '#security'
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SECURITY_SLACK_WEBHOOK_URL }}

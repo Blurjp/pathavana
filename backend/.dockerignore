@@ -1,0 +1,114 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.pytest_cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.cache
+.mypy_cache
+.dmypy.json
+dmypy.json
+
+# Virtual environments
+env
+venv
+ENV
+env.bak
+venv.bak
+.venv
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage
+
+# Dependency directories
+node_modules/
+
+# Documentation
+docs/
+*.md
+README*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache and temporary files
+cache/
+tmp/
+temp/
+*.tmp
+
+# Backup files
+backups/
+*.bak
+*.backup
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.cover
+.hypothesis/
+
+# Development scripts
+scripts/seed_data.py
+scripts/reset_database.py
+test_*.py
+*_test.py
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints
+
+# Build artifacts
+build/
+dist/
+*.egg-info/

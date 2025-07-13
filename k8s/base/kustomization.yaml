@@ -1,0 +1,56 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- namespace.yaml
+- configmap.yaml
+- secret.yaml
+- postgres.yaml
+- redis.yaml
+- backend.yaml
+- frontend.yaml
+- ingress.yaml
+
+commonLabels:
+  app: pathavana
+  version: v1.0.0
+
+namespace: pathavana
+
+images:
+- name: ghcr.io/pathavana/pathavana-backend
+  newTag: latest
+- name: ghcr.io/pathavana/pathavana-frontend
+  newTag: latest
+
+configMapGenerator:
+- name: pathavana-build-info
+  literals:
+  - BUILD_DATE=2024-01-01
+  - GIT_COMMIT=unknown
+  - GIT_BRANCH=main
+
+secretGenerator:
+- name: pathavana-runtime-secrets
+  type: Opaque
+  options:
+    disableNameSuffixHash: true
+  files:
+  - .env
+
+patchesStrategicMerge:
+- patches/resource-limits.yaml
+
+patchesJson6902:
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: pathavana-backend
+  path: patches/backend-replica-patch.yaml
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: pathavana-frontend
+  path: patches/frontend-replica-patch.yaml

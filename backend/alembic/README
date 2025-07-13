@@ -1,0 +1,110 @@
+# Alembic Database Migrations
+
+This directory contains database migrations for Pathavana using Alembic.
+
+## Structure
+
+- `env.py` - Alembic environment configuration
+- `script.py.mako` - Template for new migrations
+- `versions/` - Migration files
+
+## Configuration
+
+The migration system is configured for:
+- Async SQLAlchemy with PostgreSQL
+- Automatic model detection
+- PostgreSQL-specific features (JSONB, arrays, enums)
+- Timezone-aware timestamps
+- Update triggers for updated_at columns
+
+## Usage
+
+Use the `scripts/manage_migrations.py` utility for easier migration management, or use Alembic directly:
+
+```bash
+# Create new migration
+alembic revision --autogenerate -m "Description"
+
+# Upgrade to latest
+alembic upgrade head
+
+# Downgrade one revision
+alembic downgrade -1
+
+# Show current revision
+alembic current
+
+# Show migration history
+alembic history
+```
+
+## Best Practices
+
+1. **Always review auto-generated migrations** - Alembic may miss some changes
+2. **Test migrations on a copy of production data** before applying
+3. **Include both upgrade() and downgrade()** functions
+4. **Use batch operations** for large tables to avoid locks
+5. **Create indexes CONCURRENTLY** in production (manually)
+
+## Production Migrations
+
+For production migrations with minimal downtime:
+
+1. **Create indexes concurrently** (outside of migration):
+   ```sql
+   CREATE INDEX CONCURRENTLY ix_table_column ON table(column);
+   ```
+
+2. **Add columns as nullable first**, then add constraints in separate migration
+
+3. **Use batch operations** for data migrations:
+   ```python
+   op.execute("""
+       UPDATE large_table 
+       SET new_column = value 
+       WHERE id IN (
+           SELECT id FROM large_table 
+           WHERE new_column IS NULL 
+           LIMIT 1000
+       )
+   """)
+   ```
+
+4. **Monitor during migration**:
+   - Check active connections
+   - Monitor lock waits
+   - Have rollback plan ready
+
+## Common Issues
+
+### Enum Types
+PostgreSQL enums require special handling:
+```python
+# Create enum
+op.execute("CREATE TYPE status_enum AS ENUM ('active', 'inactive')")
+
+# Drop enum
+op.execute("DROP TYPE status_enum")
+```
+
+### JSONB Indexes
+Create GIN indexes for JSONB columns:
+```python
+op.execute("""
+    CREATE INDEX ix_table_jsonb_column_gin 
+    ON table USING GIN (jsonb_column)
+""")
+```
+
+### Foreign Key Constraints
+Handle cascading deletes carefully:
+```python
+op.create_foreign_key(
+    'fk_child_parent',
+    'child_table',
+    'parent_table',
+    ['parent_id'],
+    ['id'],
+    ondelete='CASCADE'
+)
+```

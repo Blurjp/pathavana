@@ -1,0 +1,53 @@
+{
+  "defaultMode": "allowEdits",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "osascript -e 'display notification \"Task complete!\" with title \"Claude Code\" subtitle \"All tasks finished\" sound name \"Hero\"'"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(mkdir:*)",
+      "Bash(mkdir:*)",
+      "Bash(mkdir:*)",
+      "Bash(mkdir:*)",
+      "Bash(python3:*)",
+      "Bash(chmod:*)",
+      "Bash(ls:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(pg_isready:*)",
+      "Bash(createdb:*)",
+      "Bash(source:*)",
+      "Bash(pip install:*)",
+      "Bash(grep:*)",
+      "Bash(node:*)",
+      "Bash(npm:*)",
+      "Bash(rm:*)",
+      "Bash(pip --version)",
+      "Bash(conda list:*)",
+      "Bash(conda install:*)",
+      "Bash(./start_production.sh:*)",
+      "Bash(./start_backend.sh:*)",
+      "Bash(./start_both_iterm.sh)",
+      "Bash(curl:*)",
+      "Bash(pkill:*)",
+      "Bash(true)",
+      "Bash(python:*)",
+      "Bash(mv:*)",
+      "Bash(cat:*)",
+      "Bash(kill:*)",
+      "Bash(touch:*)",
+      "Bash(uvicorn:*)"
+    ],
+    "deny": []
+  }
+}

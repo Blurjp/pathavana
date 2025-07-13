@@ -1,0 +1,143 @@
+import React, { useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { useSidebar } from '../contexts/SidebarContext';
+
+const Header: React.FC = () => {
+  const { isAuthenticated, user, logout } = useAuth();
+  const { toggleSidebar, sidebarOpen } = useSidebar();
+  const location = useLocation();
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  const isActivePath = (path: string): boolean => {
+    return location.pathname === path || location.pathname.startsWith(path);
+  };
+
+  const handleLogout = () => {
+    logout();
+    setShowUserMenu(false);
+  };
+
+  return (
+    <header className="header">
+      <div className="header-content">
+        {/* Logo and Navigation */}
+        <div className="header-left">
+          <Link to="/chat" className="logo">
+            <span className="logo-text">Pathavana</span>
+          </Link>
+          
+          <nav className="nav-menu">
+            <Link
+              to="/chat"
+              className={`nav-item ${isActivePath('/chat') ? 'active' : ''}`}
+            >
+              Chat
+            </Link>
+            <Link
+              to="/trips"
+              className={`nav-item ${isActivePath('/trips') ? 'active' : ''}`}
+            >
+              Trips
+            </Link>
+            <Link
+              to="/travelers"
+              className={`nav-item ${isActivePath('/travelers') ? 'active' : ''}`}
+            >
+              Travelers
+            </Link>
+          </nav>
+        </div>
+
+        {/* Right side controls */}
+        <div className="header-right">
+          {/* Sidebar toggle for search results */}
+          {(isActivePath('/chat') || isActivePath('/trips')) && (
+            <button
+              onClick={toggleSidebar}
+              className={`sidebar-toggle ${sidebarOpen ? 'active' : ''}`}
+              aria-label="Toggle search results"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M3 6h18M3 12h18M3 18h18"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          )}
+
+          {/* User menu */}
+          {isAuthenticated ? (
+            <div className="user-menu">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="user-avatar"
+                aria-label="User menu"
+              >
+                {user?.avatar ? (
+                  <img src={user.avatar} alt={user.full_name} />
+                ) : (
+                  <div className="avatar-placeholder">
+                    {user?.full_name?.charAt(0).toUpperCase() || 'U'}
+                  </div>
+                )}
+              </button>
+
+              {showUserMenu && (
+                <div className="user-menu-dropdown">
+                  <div className="user-info">
+                    <div className="user-name">{user?.full_name}</div>
+                    <div className="user-email">{user?.email}</div>
+                  </div>
+                  <hr />
+                  <Link
+                    to="/profile"
+                    className="menu-item"
+                    onClick={() => setShowUserMenu(false)}
+                  >
+                    Profile Settings
+                  </Link>
+                  <Link
+                    to="/trips"
+                    className="menu-item"
+                    onClick={() => setShowUserMenu(false)}
+                  >
+                    My Trips
+                  </Link>
+                  <Link
+                    to="/travelers"
+                    className="menu-item"
+                    onClick={() => setShowUserMenu(false)}
+                  >
+                    Travelers
+                  </Link>
+                  <hr />
+                  <button
+                    onClick={handleLogout}
+                    className="menu-item logout"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="auth-buttons">
+              <Link to="/login" className="btn-secondary">
+                Sign In
+              </Link>
+              <Link to="/register" className="btn-primary">
+                Sign Up
+              </Link>
+            </div>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+};
+
+export default Header;

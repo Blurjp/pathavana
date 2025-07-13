@@ -1,0 +1,102 @@
+/* PriceDisplay Component Styles */
+
+.price-display {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.price-display.compact {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Size variants */
+.price-display.small .amount {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.price-display.medium .amount {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.price-display.large .amount {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+/* Style variants */
+.price-display.default .amount {
+  color: var(--text-primary);
+}
+
+.price-display.prominent .amount {
+  color: var(--primary-color);
+}
+
+.price-display.compact .amount {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Price components */
+.price-main {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.currency-note {
+  font-size: 0.75em;
+  color: var(--text-secondary);
+  font-weight: normal;
+}
+
+/* Price change indicator */
+.price-change {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.price-change.up {
+  color: var(--error-color);
+}
+
+.price-change.down {
+  color: var(--success-color);
+}
+
+.change-indicator {
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.change-amount {
+  font-weight: 600;
+}
+
+.change-percentage {
+  opacity: 0.8;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .price-display.large .amount {
+    font-size: 1.25rem;
+  }
+  
+  .price-display.medium .amount {
+    font-size: 1rem;
+  }
+  
+  .price-change {
+    font-size: 0.6875rem;
+  }
+}

@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pathavana
+  labels:
+    app: pathavana
+    environment: base
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pathavana-staging
+  labels:
+    app: pathavana
+    environment: staging
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pathavana-production
+  labels:
+    app: pathavana
+    environment: production

@@ -1,0 +1,88 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../base
+- monitoring.yaml
+- backup.yaml
+- blue-green.yaml
+
+namespace: pathavana-production
+
+namePrefix: prod-
+
+commonLabels:
+  environment: production
+  tier: production
+
+images:
+- name: ghcr.io/pathavana/pathavana-backend
+  newTag: ${BACKEND_IMAGE_TAG}
+- name: ghcr.io/pathavana/pathavana-frontend
+  newTag: ${FRONTEND_IMAGE_TAG}
+
+configMapGenerator:
+- name: pathavana-config
+  behavior: merge
+  literals:
+  - ENVIRONMENT=production
+  - DEBUG=false
+  - LOG_LEVEL=WARNING
+  - RATE_LIMIT_PER_MINUTE=60
+
+secretGenerator:
+- name: pathavana-secrets
+  behavior: replace
+  envs:
+  - .env.production
+
+patchesStrategicMerge:
+- patches/production-resources.yaml
+- patches/production-security.yaml
+- patches/production-monitoring.yaml
+
+patchesJson6902:
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: pathavana-backend
+  path: patches/backend-production.yaml
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: pathavana-frontend
+  path: patches/frontend-production.yaml
+- target:
+    group: networking.k8s.io
+    version: v1
+    kind: Ingress
+    name: pathavana-ingress
+  path: patches/ingress-production.yaml
+
+replicas:
+- name: pathavana-backend
+  count: 3
+- name: pathavana-frontend
+  count: 2
+- name: postgres
+  count: 1
+- name: redis
+  count: 1
+
+vars:
+- name: DOMAIN
+  objref:
+    kind: ConfigMap
+    name: pathavana-config
+    apiVersion: v1
+  fieldref:
+    fieldpath: data.DOMAIN
+- name: DATABASE_URL
+  objref:
+    kind: Secret
+    name: pathavana-secrets
+    apiVersion: v1
+  fieldref:
+    fieldpath: data.DATABASE_URL

@@ -1,0 +1,290 @@
+# RBAC Configuration for Pathavana
+# Role-Based Access Control for different components and users
+
+# Service Account for Pathavana Backend
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pathavana-backend
+  namespace: pathavana-production
+  labels:
+    app: pathavana
+    component: backend
+automountServiceAccountToken: true
+---
+# Service Account for Pathavana Frontend
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pathavana-frontend
+  namespace: pathavana-production
+  labels:
+    app: pathavana
+    component: frontend
+automountServiceAccountToken: false
+---
+# Service Account for Database Operations
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pathavana-database
+  namespace: pathavana-production
+  labels:
+    app: pathavana
+    component: database
+automountServiceAccountToken: true
+---
+# Service Account for Monitoring
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pathavana-monitoring
+  namespace: pathavana-production
+  labels:
+    app: pathavana
+    component: monitoring
+automountServiceAccountToken: true
+---
+# Role for Backend Application
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: pathavana-production
+  name: pathavana-backend-role
+rules:
+# Allow reading secrets for configuration
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+  resourceNames: ["pathavana-secrets", "pathavana-runtime-secrets"]
+# Allow reading configmaps
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+  resourceNames: ["pathavana-config"]
+# Allow creating/updating own deployment status
+- apiGroups: ["apps"]
+  resources: ["deployments/status"]
+  verbs: ["get", "patch"]
+# Allow reading pod information for health checks
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+  resourceNames: ["pathavana-backend-*"]
+---
+# Role for Database Operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: pathavana-production
+  name: pathavana-database-role
+rules:
+# Allow managing database secrets
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "create", "update", "patch"]
+  resourceNames: ["postgres-secret", "database-backup-secret"]
+# Allow creating backup jobs
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+# Allow managing persistent volumes for backups
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list", "create"]
+---
+# Role for Monitoring
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: pathavana-production
+  name: pathavana-monitoring-role
+rules:
+# Allow reading all resources for monitoring
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints", "nodes", "configmaps"]
+  verbs: ["get", "list", "watch"]
+# Allow reading deployment information
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch"]
+# Allow reading metrics
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+---
+# ClusterRole for Monitoring (cross-namespace access)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pathavana-monitoring-cluster-role
+rules:
+# Allow reading cluster-level resources
+- apiGroups: [""]
+  resources: ["nodes", "nodes/metrics", "services", "endpoints", "pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "daemonsets", "replicasets", "statefulsets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["nodes", "pods"]
+  verbs: ["get", "list"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list", "watch"]
+---
+# RoleBinding for Backend
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pathavana-backend-binding
+  namespace: pathavana-production
+subjects:
+- kind: ServiceAccount
+  name: pathavana-backend
+  namespace: pathavana-production
+roleRef:
+  kind: Role
+  name: pathavana-backend-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# RoleBinding for Database
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pathavana-database-binding
+  namespace: pathavana-production
+subjects:
+- kind: ServiceAccount
+  name: pathavana-database
+  namespace: pathavana-production
+roleRef:
+  kind: Role
+  name: pathavana-database-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# RoleBinding for Monitoring
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pathavana-monitoring-binding
+  namespace: pathavana-production
+subjects:
+- kind: ServiceAccount
+  name: pathavana-monitoring
+  namespace: pathavana-production
+roleRef:
+  kind: Role
+  name: pathavana-monitoring-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# ClusterRoleBinding for Monitoring
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pathavana-monitoring-cluster-binding
+subjects:
+- kind: ServiceAccount
+  name: pathavana-monitoring
+  namespace: pathavana-production
+roleRef:
+  kind: ClusterRole
+  name: pathavana-monitoring-cluster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Role for CI/CD Pipeline
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: pathavana-production
+  name: pathavana-cicd-role
+rules:
+# Allow managing deployments for CI/CD
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+# Allow managing services
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "create", "update", "patch"]
+# Allow managing configmaps and secrets
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "create", "update", "patch"]
+# Allow managing ingress
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "create", "update", "patch"]
+---
+# Service Account for CI/CD
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pathavana-cicd
+  namespace: pathavana-production
+  labels:
+    app: pathavana
+    component: cicd
+automountServiceAccountToken: true
+---
+# RoleBinding for CI/CD
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pathavana-cicd-binding
+  namespace: pathavana-production
+subjects:
+- kind: ServiceAccount
+  name: pathavana-cicd
+  namespace: pathavana-production
+roleRef:
+  kind: Role
+  name: pathavana-cicd-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Developer Role (for development environment)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: pathavana
+  name: pathavana-developer-role
+rules:
+# Allow most operations in development namespace
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "persistentvolumeclaims"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+# Limited access to secrets
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+---
+# Readonly Role for Auditors
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pathavana-auditor-role
+rules:
+# Read-only access to most resources
+- apiGroups: [""]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+# Exclude secrets from read access
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: []
+  resourceNames: []

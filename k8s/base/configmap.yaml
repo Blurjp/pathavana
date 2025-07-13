@@ -1,0 +1,168 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pathavana-config
+  labels:
+    app: pathavana
+data:
+  # Application configuration
+  APP_NAME: "Pathavana Travel Planning API"
+  VERSION: "1.0.0"
+  API_V1_STR: "/api/v1"
+  HOST: "0.0.0.0"
+  PORT: "8000"
+  
+  # Database configuration
+  DATABASE_ECHO: "false"
+  POSTGRES_DB: "pathavana"
+  POSTGRES_HOST: "postgres"
+  POSTGRES_PORT: "5432"
+  
+  # Redis configuration
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  CACHE_TTL: "3600"
+  
+  # External API configuration
+  AMADEUS_API_BASE_URL: "https://api.amadeus.com"
+  
+  # LLM configuration
+  LLM_PROVIDER: "azure_openai"
+  LLM_MODEL: "gpt-4"
+  LLM_TEMPERATURE: "0.7"
+  LLM_MAX_TOKENS: "2000"
+  LLM_STREAMING_ENABLED: "true"
+  LLM_CACHE_TTL: "3600"
+  
+  # Rate limiting
+  RATE_LIMIT_PER_MINUTE: "60"
+  
+  # File paths
+  CACHE_DIR: "cache"
+  LOG_DIR: "logs"
+  
+  # Email configuration
+  SMTP_PORT: "587"
+  SMTP_FROM_EMAIL: "noreply@pathavana.com"
+  SMTP_FROM_NAME: "Pathavana"
+  SMTP_TLS: "true"
+  SMTP_SSL: "false"
+  
+  # JWT Token configuration
+  ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  REFRESH_TOKEN_EXPIRE_DAYS: "7"
+  PASSWORD_RESET_TOKEN_EXPIRE_HOURS: "1"
+  EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS: "24"
+  
+  # Monitoring
+  ENABLE_METRICS: "true"
+  
+  # Logging
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  labels:
+    app: pathavana
+    component: nginx
+data:
+  nginx.conf: |
+    worker_processes auto;
+    error_log /var/log/nginx/error.log warn;
+    pid /var/run/nginx.pid;
+
+    events {
+        worker_connections 1024;
+        use epoll;
+        multi_accept on;
+    }
+
+    http {
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+
+        log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                        '$status $body_bytes_sent "$http_referer" '
+                        '"$http_user_agent" "$http_x_forwarded_for"';
+
+        access_log /var/log/nginx/access.log main;
+
+        sendfile on;
+        tcp_nopush on;
+        tcp_nodelay on;
+        keepalive_timeout 65;
+        types_hash_max_size 2048;
+        server_tokens off;
+
+        # Security headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+        # Gzip compression
+        gzip on;
+        gzip_vary on;
+        gzip_min_length 10240;
+        gzip_types
+            text/plain
+            text/css
+            text/xml
+            text/javascript
+            application/javascript
+            application/xml+rss
+            application/json;
+
+        upstream backend {
+            server pathavana-backend:8000;
+        }
+
+        upstream frontend {
+            server pathavana-frontend:3000;
+        }
+
+        server {
+            listen 80;
+            server_name _;
+
+            # Health check
+            location /health {
+                access_log off;
+                return 200 "healthy\n";
+                add_header Content-Type text/plain;
+            }
+
+            # API routes
+            location /api/ {
+                proxy_pass http://backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+
+            # WebSocket support
+            location /ws {
+                proxy_pass http://backend;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+
+            # Frontend routes
+            location / {
+                proxy_pass http://frontend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+        }
+    }

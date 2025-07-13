@@ -1,0 +1,276 @@
+# Prometheus Alert Rules for Pathavana
+
+groups:
+  # Application Health Alerts
+  - name: pathavana-application
+    rules:
+      - alert: PathavanaBackendDown
+        expr: up{job="pathavana-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: backend
+        annotations:
+          summary: "Pathavana backend is down"
+          description: "Pathavana backend has been down for more than 1 minute."
+
+      - alert: PathavanaFrontendDown
+        expr: up{job="pathavana-frontend-nginx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: frontend
+        annotations:
+          summary: "Pathavana frontend is down"
+          description: "Pathavana frontend has been down for more than 1 minute."
+
+      - alert: PathavanaHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="pathavana-backend"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "High response time for Pathavana backend"
+          description: "95th percentile response time is {{ $value }}s for more than 5 minutes."
+
+      - alert: PathavanaHighErrorRate
+        expr: rate(http_requests_total{job="pathavana-backend",code=~"5.."}[5m]) / rate(http_requests_total{job="pathavana-backend"}[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: critical
+          component: backend
+        annotations:
+          summary: "High error rate for Pathavana backend"
+          description: "Error rate is {{ $value | humanizePercentage }} for more than 3 minutes."
+
+  # Database Alerts
+  - name: pathavana-database
+    rules:
+      - alert: PostgreSQLDown
+        expr: up{job="postgres-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database has been down for more than 1 minute."
+
+      - alert: PostgreSQLHighConnections
+        expr: sum(pg_stat_activity_count) / sum(pg_settings_max_connections) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "PostgreSQL high connection usage"
+          description: "PostgreSQL connection usage is {{ $value | humanizePercentage }} for more than 5 minutes."
+
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_stat_activity_max_tx_duration{datname="pathavana"}[5m]) > 300
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "Slow queries detected in PostgreSQL for more than 5 minutes."
+
+      - alert: PostgreSQLDiskSpaceUsage
+        expr: (pg_database_size_bytes{datname="pathavana"} / (1024^3)) > 15
+        for: 1m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "PostgreSQL high disk usage"
+          description: "PostgreSQL database size is {{ $value }}GB."
+
+  # Redis Alerts
+  - name: pathavana-redis
+    rules:
+      - alert: RedisDown
+        expr: up{job="redis-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: cache
+        annotations:
+          summary: "Redis is down"
+          description: "Redis cache has been down for more than 1 minute."
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is {{ $value | humanizePercentage }} for more than 5 minutes."
+
+      - alert: RedisHighConnections
+        expr: redis_connected_clients > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis high connection count"
+          description: "Redis has {{ $value }} connected clients for more than 5 minutes."
+
+  # Infrastructure Alerts
+  - name: pathavana-infrastructure
+    rules:
+      - alert: KubernetesNodeNotReady
+        expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+        for: 10m
+        labels:
+          severity: critical
+          component: kubernetes
+        annotations:
+          summary: "Kubernetes node not ready"
+          description: "Node {{ $labels.node }} has been not ready for more than 10 minutes."
+
+      - alert: KubernetesPodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: kubernetes
+        annotations:
+          summary: "Pod is crash looping"
+          description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping."
+
+      - alert: KubernetesMemoryPressure
+        expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
+        for: 5m
+        labels:
+          severity: critical
+          component: kubernetes
+        annotations:
+          summary: "Kubernetes node memory pressure"
+          description: "Node {{ $labels.node }} is under memory pressure."
+
+      - alert: KubernetesDiskPressure
+        expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+        for: 5m
+        labels:
+          severity: critical
+          component: kubernetes
+        annotations:
+          summary: "Kubernetes node disk pressure"
+          description: "Node {{ $labels.node }} is under disk pressure."
+
+  # Resource Usage Alerts
+  - name: pathavana-resources
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% for more than 10 minutes."
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}% for more than 10 minutes."
+
+      - alert: LowDiskSpace
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Low disk space"
+          description: "Disk usage is {{ $value }}% on {{ $labels.device }} for more than 5 minutes."
+
+  # Business Logic Alerts
+  - name: pathavana-business
+    rules:
+      - alert: HighFailedBookings
+        expr: rate(pathavana_bookings_failed_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "High failed booking rate"
+          description: "Failed booking rate is {{ $value }} per second for more than 3 minutes."
+
+      - alert: LowUserActivity
+        expr: rate(pathavana_user_sessions_total[30m]) < 0.01
+        for: 30m
+        labels:
+          severity: info
+          component: business
+        annotations:
+          summary: "Low user activity"
+          description: "User session rate is {{ $value }} per second, which is unusually low."
+
+      - alert: APIRateLimit
+        expr: rate(pathavana_api_rate_limited_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API rate limiting"
+          description: "API rate limiting events are occurring at {{ $value }} per second."
+
+  # External Dependencies
+  - name: pathavana-external
+    rules:
+      - alert: AmadeusAPIDown
+        expr: up{job="amadeus-api-monitor"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          component: external
+        annotations:
+          summary: "Amadeus API is unreachable"
+          description: "Amadeus API has been unreachable for more than 5 minutes."
+
+      - alert: OpenAIAPIErrors
+        expr: rate(pathavana_openai_errors_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          component: external
+        annotations:
+          summary: "High OpenAI API error rate"
+          description: "OpenAI API error rate is {{ $value }} per second for more than 5 minutes."
+
+  # Security Alerts
+  - name: pathavana-security
+    rules:
+      - alert: HighLoginFailures
+        expr: rate(pathavana_login_failures_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "High login failure rate"
+          description: "Login failure rate is {{ $value }} per second for more than 5 minutes."
+
+      - alert: SuspiciousActivity
+        expr: rate(pathavana_suspicious_requests_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: critical
+          component: security
+        annotations:
+          summary: "Suspicious activity detected"
+          description: "Suspicious request rate is {{ $value }} per second for more than 3 minutes."

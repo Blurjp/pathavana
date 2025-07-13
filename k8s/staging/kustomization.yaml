@@ -1,0 +1,68 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../base
+- monitoring.yaml
+
+namespace: pathavana-staging
+
+namePrefix: staging-
+
+commonLabels:
+  environment: staging
+  tier: staging
+
+images:
+- name: ghcr.io/pathavana/pathavana-backend
+  newTag: ${BACKEND_IMAGE_TAG}
+- name: ghcr.io/pathavana/pathavana-frontend
+  newTag: ${FRONTEND_IMAGE_TAG}
+
+configMapGenerator:
+- name: pathavana-config
+  behavior: merge
+  literals:
+  - ENVIRONMENT=staging
+  - DEBUG=false
+  - LOG_LEVEL=INFO
+  - RATE_LIMIT_PER_MINUTE=100
+
+secretGenerator:
+- name: pathavana-secrets
+  behavior: replace
+  envs:
+  - .env.staging
+
+patchesStrategicMerge:
+- patches/staging-resources.yaml
+
+patchesJson6902:
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: pathavana-backend
+  path: patches/backend-staging.yaml
+- target:
+    group: apps
+    version: v1
+    kind: Deployment
+    name: pathavana-frontend
+  path: patches/frontend-staging.yaml
+- target:
+    group: networking.k8s.io
+    version: v1
+    kind: Ingress
+    name: pathavana-ingress
+  path: patches/ingress-staging.yaml
+
+replicas:
+- name: pathavana-backend
+  count: 2
+- name: pathavana-frontend
+  count: 1
+- name: postgres
+  count: 1
+- name: redis
+  count: 1

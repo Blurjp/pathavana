@@ -1,0 +1,130 @@
+# Terraform Variables Example for Pathavana Infrastructure
+# Copy this file to terraform.tfvars and customize for your environment
+
+# Project Configuration
+project_name = "pathavana"
+environment  = "dev"  # dev, staging, prod
+owner        = "pathavana-team"
+
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Networking
+vpc_cidr = "10.0.0.0/16"
+
+# EKS Configuration
+kubernetes_version   = "1.28"
+node_instance_types  = ["t3.medium", "t3.large"]
+node_desired_size    = 2
+node_max_size        = 10
+node_min_size        = 1
+
+# Spot instances for cost optimization
+spot_instance_types  = ["t3.medium", "t3.large", "m5.large"]
+spot_desired_size    = 0
+spot_max_size        = 5
+spot_min_size        = 0
+
+# Database Configuration
+postgres_version             = "15.4"
+db_instance_class           = "db.t3.micro"  # Use db.t3.small or larger for production
+db_allocated_storage        = 20
+db_max_allocated_storage    = 100
+db_name                     = "pathavana"
+db_username                 = "postgres"
+db_backup_retention_period  = 7
+db_backup_window           = "03:00-04:00"
+db_maintenance_window      = "sun:04:00-sun:05:00"
+
+# Redis Configuration
+redis_node_type = "cache.t3.micro"  # Use cache.t3.small or larger for production
+redis_num_nodes = 1
+
+# Domain Configuration
+domain_name         = "pathavana.com"
+subdomain_name      = "dev"  # Will create dev.pathavana.com
+ssl_certificate_arn = ""     # Add your SSL certificate ARN
+
+# Monitoring Configuration
+log_retention_days      = 14
+prometheus_storage_size = "20Gi"
+grafana_admin_password  = "change-me-in-production"
+
+# Cost Optimization
+enable_cost_optimization = true
+enable_spot_instances    = false  # Set to true for non-critical workloads
+
+# Security Configuration
+enable_waf       = false  # Set to true for production
+enable_guardduty = false  # Set to true for production
+enable_config    = false  # Set to true for compliance requirements
+
+# Backup Configuration
+backup_retention_days      = 30
+enable_cross_region_backup = false
+backup_region             = "us-west-2"
+
+# Feature Flags
+enable_autoscaling  = true
+enable_monitoring   = true
+enable_logging      = true
+enable_service_mesh = false
+
+# Performance Configuration
+enable_redis_cluster = false
+enable_read_replicas = false
+num_read_replicas    = 1
+
+# Development Configuration
+enable_bastion_host = false
+enable_vpn         = false
+
+# Compliance and Security
+enable_encryption_at_rest    = true
+enable_encryption_in_transit = true
+compliance_framework         = "SOC2"
+
+# Additional Resource Tags
+additional_tags = {
+  "Team"        = "DevOps"
+  "CostCenter"  = "Engineering"
+  "Project"     = "Pathavana"
+}
+
+# Environment-specific examples:
+
+# Development Environment
+# environment         = "dev"
+# db_instance_class   = "db.t3.micro"
+# redis_node_type     = "cache.t3.micro"
+# node_desired_size   = 1
+# node_max_size       = 3
+# enable_monitoring   = false
+# enable_waf          = false
+# log_retention_days  = 7
+
+# Staging Environment
+# environment         = "staging"
+# db_instance_class   = "db.t3.small"
+# redis_node_type     = "cache.t3.small"
+# node_desired_size   = 2
+# node_max_size       = 5
+# enable_monitoring   = true
+# enable_waf          = true
+# log_retention_days  = 14
+
+# Production Environment
+# environment         = "prod"
+# db_instance_class   = "db.t3.medium"
+# redis_node_type     = "cache.t3.medium"
+# node_desired_size   = 3
+# node_max_size       = 20
+# enable_monitoring   = true
+# enable_waf          = true
+# enable_guardduty    = true
+# enable_config       = true
+# log_retention_days  = 90
+# backup_retention_days = 90
+# enable_cross_region_backup = true
+# enable_read_replicas = true
+# num_read_replicas   = 2

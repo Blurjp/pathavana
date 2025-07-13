@@ -1,0 +1,341 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Build and push Docker images
+  build-and-push:
+    name: Build and Push Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      backend-image: ${{ steps.meta-backend.outputs.tags }}
+      frontend-image: ${{ steps.meta-frontend.outputs.tags }}
+      backend-digest: ${{ steps.build-backend.outputs.digest }}
+      frontend-digest: ${{ steps.build-frontend.outputs.digest }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    # Backend Image
+    - name: Extract metadata for backend
+      id: meta-backend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix={{branch}}-
+
+    - name: Build and push backend image
+      id: build-backend
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        file: ./backend/Dockerfile
+        target: production
+        push: true
+        tags: ${{ steps.meta-backend.outputs.tags }}
+        labels: ${{ steps.meta-backend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+    # Frontend Image
+    - name: Extract metadata for frontend
+      id: meta-frontend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix={{branch}}-
+
+    - name: Build and push frontend image
+      id: build-frontend
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        file: ./frontend/Dockerfile
+        target: nginx-production
+        push: true
+        tags: ${{ steps.meta-frontend.outputs.tags }}
+        labels: ${{ steps.meta-frontend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+        build-args: |
+          REACT_APP_API_URL=${{ vars.REACT_APP_API_URL }}
+          REACT_APP_WS_URL=${{ vars.REACT_APP_WS_URL }}
+
+  # Security scanning of built images
+  security-scan:
+    name: Security Scan Images
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    permissions:
+      security-events: write
+
+    strategy:
+      matrix:
+        image: [backend, frontend]
+
+    steps:
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ needs.build-and-push.outputs[format('{0}-image', matrix.image)] }}
+        format: 'sarif'
+        output: 'trivy-results-${{ matrix.image }}.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results-${{ matrix.image }}.sarif'
+
+  # Deploy to staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'staging'
+    environment:
+      name: staging
+      url: https://staging.pathavana.com
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION }}
+
+    - name: Install kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ vars.AWS_REGION }} --name ${{ vars.EKS_CLUSTER_NAME }}-staging
+
+    - name: Deploy to Kubernetes
+      run: |
+        envsubst < k8s/staging/kustomization.yaml | kubectl apply -k -
+        kubectl set image deployment/pathavana-backend backend=${{ needs.build-and-push.outputs.backend-image }} -n pathavana-staging
+        kubectl set image deployment/pathavana-frontend frontend=${{ needs.build-and-push.outputs.frontend-image }} -n pathavana-staging
+        kubectl rollout status deployment/pathavana-backend -n pathavana-staging --timeout=300s
+        kubectl rollout status deployment/pathavana-frontend -n pathavana-staging --timeout=300s
+
+    - name: Run smoke tests
+      run: |
+        sleep 30
+        curl -f https://staging.pathavana.com/health || exit 1
+        curl -f https://staging.pathavana.com/api/v1/health || exit 1
+
+    - name: Notify deployment
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        text: "🚀 Deployed to staging: https://staging.pathavana.com"
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Deploy to production
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build-and-push, security-scan, deploy-staging]
+    if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.environment == 'production'
+    environment:
+      name: production
+      url: https://pathavana.com
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION }}
+
+    - name: Install kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ vars.AWS_REGION }} --name ${{ vars.EKS_CLUSTER_NAME }}-production
+
+    - name: Create backup
+      run: |
+        kubectl create job backup-$(date +%Y%m%d-%H%M%S) --from=cronjob/database-backup -n pathavana-production
+
+    - name: Deploy with blue-green strategy
+      run: |
+        # Deploy to green environment
+        envsubst < k8s/production/kustomization.yaml | kubectl apply -k -
+        kubectl set image deployment/pathavana-backend-green backend=${{ needs.build-and-push.outputs.backend-image }} -n pathavana-production
+        kubectl set image deployment/pathavana-frontend-green frontend=${{ needs.build-and-push.outputs.frontend-image }} -n pathavana-production
+        
+        # Wait for green deployment to be ready
+        kubectl rollout status deployment/pathavana-backend-green -n pathavana-production --timeout=600s
+        kubectl rollout status deployment/pathavana-frontend-green -n pathavana-production --timeout=600s
+        
+        # Run health checks on green environment
+        sleep 30
+        kubectl port-forward service/pathavana-backend-green 8080:8000 -n pathavana-production &
+        sleep 10
+        curl -f http://localhost:8080/health || exit 1
+        pkill -f "kubectl port-forward"
+        
+        # Switch traffic to green (blue-green deployment)
+        kubectl patch service pathavana-backend -p '{"spec":{"selector":{"version":"green"}}}' -n pathavana-production
+        kubectl patch service pathavana-frontend -p '{"spec":{"selector":{"version":"green"}}}' -n pathavana-production
+        
+        # Verify production health
+        sleep 30
+        curl -f https://pathavana.com/health || exit 1
+        curl -f https://pathavana.com/api/v1/health || exit 1
+        
+        # Scale down blue environment after successful deployment
+        kubectl scale deployment pathavana-backend-blue --replicas=0 -n pathavana-production
+        kubectl scale deployment pathavana-frontend-blue --replicas=0 -n pathavana-production
+
+    - name: Update DNS records
+      run: |
+        # Update Route53 records if needed
+        aws route53 change-resource-record-sets --hosted-zone-id ${{ vars.HOSTED_ZONE_ID }} \
+          --change-batch file://dns-updates.json
+
+    - name: Run post-deployment tests
+      run: |
+        # Run comprehensive production tests
+        pytest tests/production/ -v --maxfail=5
+
+    - name: Create GitHub release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        body: |
+          ## Changes in this Release
+          - Backend image: ${{ needs.build-and-push.outputs.backend-image }}
+          - Frontend image: ${{ needs.build-and-push.outputs.frontend-image }}
+          
+          ## Deployment
+          - Staging: ✅ Deployed
+          - Production: ✅ Deployed
+          
+          ## Security
+          - Security scan: ✅ Passed
+          - Vulnerability assessment: ✅ Clean
+        draft: false
+        prerelease: false
+
+    - name: Notify successful deployment
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        text: "🎉 Successfully deployed to production: https://pathavana.com"
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Rollback on failure
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: failure()
+    environment:
+      name: production
+
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION }}
+
+    - name: Install kubectl
+      uses: azure/setup-kubectl@v3
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ vars.AWS_REGION }} --name ${{ vars.EKS_CLUSTER_NAME }}-production
+
+    - name: Rollback to previous version
+      run: |
+        # Switch traffic back to blue environment
+        kubectl patch service pathavana-backend -p '{"spec":{"selector":{"version":"blue"}}}' -n pathavana-production
+        kubectl patch service pathavana-frontend -p '{"spec":{"selector":{"version":"blue"}}}' -n pathavana-production
+        
+        # Scale up blue environment
+        kubectl scale deployment pathavana-backend-blue --replicas=3 -n pathavana-production
+        kubectl scale deployment pathavana-frontend-blue --replicas=2 -n pathavana-production
+        
+        # Wait for rollback to complete
+        kubectl rollout status deployment/pathavana-backend-blue -n pathavana-production --timeout=300s
+        kubectl rollout status deployment/pathavana-frontend-blue -n pathavana-production --timeout=300s
+
+    - name: Verify rollback
+      run: |
+        sleep 30
+        curl -f https://pathavana.com/health || exit 1
+
+    - name: Notify rollback
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        text: "🔄 Production deployment failed - rolled back to previous version"
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

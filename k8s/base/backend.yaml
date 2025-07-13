@@ -1,0 +1,245 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pathavana-backend
+  labels:
+    app: pathavana
+    component: backend
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: pathavana
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: pathavana
+        component: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      imagePullSecrets:
+      - name: registry-secret
+      containers:
+      - name: backend
+        image: ghcr.io/pathavana/pathavana-backend:latest
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        # Configuration from ConfigMap
+        - name: APP_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: pathavana-config
+              key: APP_NAME
+        - name: VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: pathavana-config
+              key: VERSION
+        - name: API_V1_STR
+          valueFrom:
+            configMapKeyRef:
+              name: pathavana-config
+              key: API_V1_STR
+        - name: HOST
+          valueFrom:
+            configMapKeyRef:
+              name: pathavana-config
+              key: HOST
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: pathavana-config
+              key: PORT
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: pathavana-config
+              key: LOG_LEVEL
+        - name: CACHE_TTL
+          valueFrom:
+            configMapKeyRef:
+              name: pathavana-config
+              key: CACHE_TTL
+        - name: LLM_PROVIDER
+          valueFrom:
+            configMapKeyRef:
+              name: pathavana-config
+              key: LLM_PROVIDER
+        - name: LLM_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: pathavana-config
+              key: LLM_MODEL
+        - name: ENABLE_METRICS
+          valueFrom:
+            configMapKeyRef:
+              name: pathavana-config
+              key: ENABLE_METRICS
+        # Secrets
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: pathavana-secrets
+              key: DATABASE_URL
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: pathavana-secrets
+              key: REDIS_URL
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: pathavana-secrets
+              key: SECRET_KEY
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: pathavana-secrets
+              key: OPENAI_API_KEY
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: pathavana-secrets
+              key: ANTHROPIC_API_KEY
+        - name: AMADEUS_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: pathavana-secrets
+              key: AMADEUS_API_KEY
+        - name: AMADEUS_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: pathavana-secrets
+              key: AMADEUS_API_SECRET
+        - name: SMTP_HOST
+          valueFrom:
+            secretKeyRef:
+              name: pathavana-secrets
+              key: SMTP_HOST
+        - name: SMTP_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: pathavana-secrets
+              key: SMTP_USERNAME
+        - name: SMTP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pathavana-secrets
+              key: SMTP_PASSWORD
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+        - name: cache
+          mountPath: /app/cache
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: false
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: logs
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pathavana-backend
+  labels:
+    app: pathavana
+    component: backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: pathavana
+    component: backend
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pathavana-backend-hpa
+  labels:
+    app: pathavana
+    component: backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pathavana-backend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15

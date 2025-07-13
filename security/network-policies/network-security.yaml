@@ -1,0 +1,404 @@
+# Network Security Policies for Pathavana
+# Implements network segmentation and traffic control
+
+# Default Deny All Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: pathavana-production
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+# Frontend Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pathavana-frontend-policy
+  namespace: pathavana-production
+spec:
+  podSelector:
+    matchLabels:
+      app: pathavana
+      component: frontend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 3000
+  # Allow ingress from load balancer
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 3000
+  egress:
+  # Allow egress to backend
+  - to:
+    - podSelector:
+        matchLabels:
+          app: pathavana
+          component: backend
+    ports:
+    - protocol: TCP
+      port: 8000
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+---
+# Backend Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pathavana-backend-policy
+  namespace: pathavana-production
+spec:
+  podSelector:
+    matchLabels:
+      app: pathavana
+      component: backend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from frontend
+  - from:
+    - podSelector:
+        matchLabels:
+          app: pathavana
+          component: frontend
+    ports:
+    - protocol: TCP
+      port: 8000
+  # Allow ingress from ingress controller (for direct API access)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8000
+  # Allow ingress from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  # Allow egress to database
+  - to:
+    - podSelector:
+        matchLabels:
+          app: pathavana
+          component: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow egress to Redis
+  - to:
+    - podSelector:
+        matchLabels:
+          app: pathavana
+          component: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow egress to external APIs (HTTPS)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+---
+# Database Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pathavana-database-policy
+  namespace: pathavana-production
+spec:
+  podSelector:
+    matchLabels:
+      app: pathavana
+      component: postgres
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from backend only
+  - from:
+    - podSelector:
+        matchLabels:
+          app: pathavana
+          component: backend
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow ingress from backup jobs
+  - from:
+    - podSelector:
+        matchLabels:
+          app: pathavana
+          component: backup
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow ingress from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9187  # postgres-exporter port
+  egress:
+  # Allow minimal egress for updates (if needed)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+---
+# Redis Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pathavana-redis-policy
+  namespace: pathavana-production
+spec:
+  podSelector:
+    matchLabels:
+      app: pathavana
+      component: redis
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from backend only
+  - from:
+    - podSelector:
+        matchLabels:
+          app: pathavana
+          component: backend
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow ingress from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9121  # redis-exporter port
+  egress:
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+---
+# Monitoring Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pathavana-monitoring-policy
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app: monitoring
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 3000  # Grafana
+    - protocol: TCP
+      port: 9090  # Prometheus
+  egress:
+  # Allow egress to all namespaces for monitoring
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 8000   # Backend metrics
+    - protocol: TCP
+      port: 9187   # Postgres exporter
+    - protocol: TCP
+      port: 9121   # Redis exporter
+    - protocol: TCP
+      port: 10254  # Nginx ingress metrics
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+---
+# Ingress Controller Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress-nginx-policy
+  namespace: ingress-nginx
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ingress-nginx
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow all ingress traffic (public-facing)
+  - {}
+  egress:
+  # Allow egress to application namespaces
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          app: pathavana
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 3000
+  # Allow egress to monitoring
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 3000
+    - protocol: TCP
+      port: 9090
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+---
+# Backup Job Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pathavana-backup-policy
+  namespace: pathavana-production
+spec:
+  podSelector:
+    matchLabels:
+      app: pathavana
+      component: backup
+  policyTypes:
+  - Ingress
+  - Egress
+  egress:
+  # Allow egress to database for backups
+  - to:
+    - podSelector:
+        matchLabels:
+          app: pathavana
+          component: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow egress to external storage (S3, etc.)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+---
+# CI/CD Network Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pathavana-cicd-policy
+  namespace: pathavana-production
+spec:
+  podSelector:
+    matchLabels:
+      app: pathavana
+      component: cicd
+  policyTypes:
+  - Egress
+  egress:
+  # Allow egress to Kubernetes API
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow egress to container registries
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53

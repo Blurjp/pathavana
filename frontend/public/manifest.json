@@ -1,0 +1,76 @@
+{
+  "short_name": "Pathavana",
+  "name": "Pathavana - AI Travel Planning",
+  "description": "Plan your perfect trip with AI-powered conversation. Find flights, hotels, and activities tailored to your preferences.",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "./",
+  "display": "standalone",
+  "theme_color": "#2563eb",
+  "background_color": "#ffffff",
+  "orientation": "portrait-primary",
+  "scope": "./",
+  "lang": "en-US",
+  "categories": ["travel", "productivity", "lifestyle"],
+  "screenshots": [
+    {
+      "src": "screenshot-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Chat interface for planning trips"
+    },
+    {
+      "src": "screenshot-narrow.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mobile trip planning interface"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Start Planning",
+      "short_name": "Plan Trip",
+      "description": "Start planning a new trip",
+      "url": "/chat",
+      "icons": [
+        {
+          "src": "icon-planning.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "My Trips",
+      "short_name": "Trips",
+      "description": "View saved trips",
+      "url": "/trips",
+      "icons": [
+        {
+          "src": "icon-trips.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
+}
