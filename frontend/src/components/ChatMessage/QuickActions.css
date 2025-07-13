@@ -1,0 +1,105 @@
+.quick-actions-container {
+  width: 100%;
+  overflow: hidden;
+  background: #f8f9fa;
+  border-top: 1px solid #e0e0e0;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 12px 0;
+  margin: 16px 0;
+}
+
+.quick-actions-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 0 16px;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.quick-actions-scroll::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+.quick-action-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.quick-action-btn:hover {
+  background: #f0f0f0;
+  border-color: #2196F3;
+  color: #2196F3;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.quick-action-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.quick-action-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.quick-action-label {
+  font-size: 14px;
+}
+
+/* Animated entrance */
+.quick-action-btn {
+  animation: slideInUp 0.3s ease;
+  animation-fill-mode: both;
+}
+
+.quick-action-btn:nth-child(1) { animation-delay: 0.05s; }
+.quick-action-btn:nth-child(2) { animation-delay: 0.1s; }
+.quick-action-btn:nth-child(3) { animation-delay: 0.15s; }
+.quick-action-btn:nth-child(4) { animation-delay: 0.2s; }
+.quick-action-btn:nth-child(5) { animation-delay: 0.25s; }
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .quick-actions-container {
+    padding: 8px 0;
+    margin: 12px 0;
+  }
+  
+  .quick-actions-scroll {
+    padding: 0 12px;
+  }
+  
+  .quick-action-btn {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+  
+  .quick-action-icon {
+    font-size: 14px;
+  }
+}
