@@ -1,12 +1,13 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { ApiResponse } from '../types';
+import { configService } from './configService';
 
 class ApiClient {
   private client: AxiosInstance;
 
   constructor() {
     this.client = axios.create({
-      baseURL: process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000',
+      baseURL: 'http://localhost:8001', // Default, will be updated dynamically
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
@@ -14,6 +15,16 @@ class ApiClient {
     });
 
     this.setupInterceptors();
+    this.updateBaseURL(); // Update base URL from config
+  }
+
+  private async updateBaseURL() {
+    try {
+      const baseURL = await configService.getApiBaseUrl();
+      this.client.defaults.baseURL = baseURL;
+    } catch (error) {
+      console.warn('Failed to update API base URL from config:', error);
+    }
   }
 
   private setupInterceptors() {
@@ -40,7 +51,9 @@ class ApiClient {
         if (error.response?.status === 401) {
           // Handle unauthorized access
           localStorage.removeItem('auth_token');
-          window.location.href = '/login';
+          localStorage.removeItem('user');
+          // Don't redirect, let the AuthGuard handle showing login modal
+          // This prevents infinite redirect loops
         }
         return Promise.reject(error);
       }
@@ -62,9 +75,9 @@ class ApiClient {
     }
   }
 
-  async post<T>(url: string, data?: any): Promise<ApiResponse<T>> {
+  async post<T>(url: string, data?: any, config?: any): Promise<ApiResponse<T>> {
     try {
-      const response = await this.client.post(url, data);
+      const response = await this.client.post(url, data, config);
       return {
         success: true,
         data: response.data,
@@ -72,7 +85,7 @@ class ApiClient {
     } catch (error: any) {
       return {
         success: false,
-        error: error.response?.data?.message || error.message || 'An error occurred',
+        error: error.response?.data?.detail || error.response?.data?.message || error.message || 'An error occurred',
       };
     }
   }

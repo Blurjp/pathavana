@@ -3,8 +3,10 @@ Main FastAPI application entry point for Pathavana travel planning API.
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import HTTPException
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import logging
 import os
@@ -14,7 +16,7 @@ from datetime import datetime
 from .core.config import settings
 from .core.database import init_db, close_db, get_db
 from .core.logging_config import setup_logging, get_logger
-from .api import travel_unified, bookings, travelers, data_compliance, auth
+from .api import travel_unified, bookings, travelers, data_compliance, auth_simple, auth_v2, config
 from .middleware import (
     RateLimitMiddleware,
     SecurityHeadersMiddleware,
@@ -92,14 +94,47 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Custom exception handler to ensure CORS headers are included in error responses
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Handle HTTP exceptions with proper CORS headers."""
+    origin = request.headers.get("origin", "http://localhost:3000")
+    headers = {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "true",
+    }
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=headers
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle general exceptions with proper CORS headers."""
+    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
+    origin = request.headers.get("origin", "http://localhost:3000")
+    headers = {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "true",
+    }
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers=headers
+    )
+
 # Add middleware (order matters - outermost middleware runs first)
 # Security headers
 app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS - must be before authentication
+# Parse CORS origins from comma-separated string to list
+cors_origins = [origin.strip() for origin in settings.BACKEND_CORS_ORIGINS.split(",")] if settings.BACKEND_CORS_ORIGINS else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -146,10 +181,18 @@ async def setup_rate_limiting():
     )
 
 # Include API routers
-# Authentication routes (public)
+# Configuration routes (public)
 app.include_router(
-    auth.router,
+    config.router,
     prefix=f"{settings.API_V1_STR}",
+    tags=["configuration"]
+)
+
+# Authentication routes (public)
+# Using v2 auth with better error handling
+app.include_router(
+    auth_v2.router,
+    prefix=f"{settings.API_V1_STR}/auth",
     tags=["authentication"]
 )
 

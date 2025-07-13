@@ -79,6 +79,20 @@ else
     echo "⚠️ Alembic not configured - skipping database migrations"
 fi
 
+# Kill any process running on port 8000
+echo "🔍 Checking for processes on port 8000..."
+PIDS=$(lsof -ti :8000)
+
+if [ ! -z "$PIDS" ]; then
+    echo "⚠️  Found process(es) on port 8000: $PIDS"
+    echo "🛑 Killing process(es)..."
+    kill -9 $PIDS 2>/dev/null
+    sleep 1
+    echo "✅ Port 8000 is now free"
+else
+    echo "✅ Port 8000 is already free"
+fi
+
 # Start the server
 echo "🚀 Starting FastAPI server..."
 echo "📍 Server will be available at: http://localhost:8000"

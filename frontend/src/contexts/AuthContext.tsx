@@ -35,7 +35,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return;
       }
 
-      const response = await apiClient.get<User>('/api/auth/me');
+      const response = await apiClient.get<User>('/api/v1/auth/me');
       if (response.success && response.data) {
         setAuthState({
           isAuthenticated: true,
@@ -67,7 +67,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setAuthState(prev => ({ ...prev, isLoading: true }));
       
-      const response = await apiClient.post<{ access_token: string; user: User }>('/api/auth/signin', credentials);
+      // Convert to OAuth2 format expected by backend
+      const formData = new URLSearchParams();
+      formData.append('username', credentials.email);
+      formData.append('password', credentials.password);
+      
+      const response = await apiClient.post<{ access_token: string; refresh_token: string; user: User }>('/api/v1/auth/login', formData.toString(), {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      });
       
       if (response.success && response.data) {
         const { user, access_token } = response.data;
@@ -93,7 +102,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setAuthState(prev => ({ ...prev, isLoading: true }));
       
-      const response = await apiClient.post<{ access_token: string; user: User }>('/api/auth/signup', data);
+      const response = await apiClient.post<{ access_token: string; refresh_token: string; user: User }>('/api/v1/auth/register', data);
       
       if (response.success && response.data) {
         const { user, access_token } = response.data;

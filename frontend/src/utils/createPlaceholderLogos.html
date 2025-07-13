@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate Logo PNGs</title>
+</head>
+<body>
+    <h1>Logo Generator</h1>
+    <canvas id="canvas192" width="192" height="192"></canvas>
+    <canvas id="canvas512" width="512" height="512"></canvas>
+    
+    <script>
+        function drawLogo(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // Background
+            ctx.fillStyle = '#2563eb';
+            ctx.fillRect(0, 0, size, size);
+            
+            // Letter P
+            ctx.fillStyle = 'white';
+            ctx.font = `bold ${size * 0.5}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('P', size / 2, size / 2);
+            
+            // Convert to PNG
+            canvas.toBlob(function(blob) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `logo${size}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 'image/png');
+        }
+        
+        // Generate both logos
+        drawLogo('canvas192', 192);
+        drawLogo('canvas512', 512);
+        
+        document.body.innerHTML += '<p>If downloads did not start automatically, right-click the canvases above and save as PNG.</p>';
+    </script>
+</body>
+</html>

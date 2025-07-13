@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OAuth Test</title>
+</head>
+<body>
+    <h1>OAuth Configuration Test</h1>
+    <button onclick="testConfig()">Test Config Endpoint</button>
+    <button onclick="testOAuth()">Test OAuth URL</button>
+    <pre id="output"></pre>
+
+    <script>
+        async function testConfig() {
+            const output = document.getElementById('output');
+            try {
+                const response = await fetch('http://localhost:8001/api/v1/frontend-config');
+                const data = await response.json();
+                output.textContent = 'Config Response:\n' + JSON.stringify(data, null, 2);
+            } catch (error) {
+                output.textContent = 'Error: ' + error.message;
+            }
+        }
+
+        async function testOAuth() {
+            const output = document.getElementById('output');
+            try {
+                const url = 'http://localhost:8001/api/v1/auth/oauth-url/google?redirect_uri=' + 
+                           encodeURIComponent('http://localhost:3000/auth/callback');
+                output.textContent = 'Requesting: ' + url + '\n\n';
+                
+                const response = await fetch(url);
+                output.textContent += 'Status: ' + response.status + ' ' + response.statusText + '\n\n';
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    output.textContent += 'OAuth Response:\n' + JSON.stringify(data, null, 2);
+                } else {
+                    const text = await response.text();
+                    output.textContent += 'Error Response:\n' + text;
+                }
+            } catch (error) {
+                output.textContent += 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

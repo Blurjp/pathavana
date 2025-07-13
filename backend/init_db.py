@@ -11,10 +11,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from sqlalchemy import create_engine
 from app.core.config import settings
-from app.core.database import Base
 
-# Import all models to register them with Base
+# Import all models including the correct Base
 from app.models import (
+    Base,
     User, UserProfile, TravelPreferences, UserDocument,
     UserSession, TokenBlacklist, AuthenticationLog, OAuthConnection, PasswordResetToken,
     Traveler, TravelerDocument, TravelerPreference,

@@ -91,11 +91,10 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
-    # Relationships
+    # Relationships - simplified to avoid circular dependencies
     profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     travel_preferences = relationship("TravelPreferences", back_populates="user", uselist=False, cascade="all, delete-orphan")
     documents = relationship("UserDocument", back_populates="user", cascade="all, delete-orphan")
-    travel_sessions = relationship("UnifiedTravelSession", back_populates="user", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index('idx_user_auth_provider', 'auth_provider', 'provider_user_id'),

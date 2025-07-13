@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Unregister Service Worker</title>
+</head>
+<body>
+    <h1>Unregistering Service Worker...</h1>
+    <div id="status"></div>
+    <script>
+        const statusDiv = document.getElementById('status');
+        
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                if (registrations.length === 0) {
+                    statusDiv.innerHTML = '<p>No service workers found.</p>';
+                } else {
+                    statusDiv.innerHTML = '<p>Found ' + registrations.length + ' service worker(s). Unregistering...</p>';
+                    
+                    Promise.all(registrations.map(reg => reg.unregister()))
+                        .then(() => {
+                            statusDiv.innerHTML += '<p style="color: green;">All service workers unregistered successfully!</p>';
+                            statusDiv.innerHTML += '<p>Clearing caches...</p>';
+                            
+                            // Clear all caches
+                            return caches.keys();
+                        })
+                        .then(cacheNames => {
+                            return Promise.all(
+                                cacheNames.map(cacheName => {
+                                    console.log('Deleting cache:', cacheName);
+                                    return caches.delete(cacheName);
+                                })
+                            );
+                        })
+                        .then(() => {
+                            statusDiv.innerHTML += '<p style="color: green;">All caches cleared!</p>';
+                            statusDiv.innerHTML += '<p><strong>You can now close this tab and return to your application.</strong></p>';
+                        })
+                        .catch(err => {
+                            statusDiv.innerHTML += '<p style="color: red;">Error: ' + err + '</p>';
+                        });
+                }
+            });
+        } else {
+            statusDiv.innerHTML = '<p>Service workers are not supported in this browser.</p>';
+        }
+    </script>
+</body>
+</html>

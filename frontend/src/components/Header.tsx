@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSidebar } from '../contexts/SidebarContext';
+import { LoginModal } from './auth/LoginModalSimple';
 
 const Header: React.FC = () => {
   const { isAuthenticated, user, logout } = useAuth();
   const { toggleSidebar, sidebarOpen } = useSidebar();
   const location = useLocation();
+  const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   const isActivePath = (path: string): boolean => {
     return location.pathname === path || location.pathname.startsWith(path);
@@ -19,34 +22,37 @@ const Header: React.FC = () => {
   };
 
   return (
+    <>
     <header className="header">
       <div className="header-content">
         {/* Logo and Navigation */}
         <div className="header-left">
-          <Link to="/chat" className="logo">
+          <Link to="/" className="logo">
             <span className="logo-text">Pathavana</span>
           </Link>
           
-          <nav className="nav-menu">
-            <Link
-              to="/chat"
-              className={`nav-item ${isActivePath('/chat') ? 'active' : ''}`}
-            >
-              Chat
-            </Link>
-            <Link
-              to="/trips"
-              className={`nav-item ${isActivePath('/trips') ? 'active' : ''}`}
-            >
-              Trips
-            </Link>
-            <Link
-              to="/travelers"
-              className={`nav-item ${isActivePath('/travelers') ? 'active' : ''}`}
-            >
-              Travelers
-            </Link>
-          </nav>
+          {isAuthenticated && (
+            <nav className="nav-menu">
+              <Link
+                to="/chat"
+                className={`nav-item ${isActivePath('/chat') ? 'active' : ''}`}
+              >
+                Chat
+              </Link>
+              <Link
+                to="/trips"
+                className={`nav-item ${isActivePath('/trips') ? 'active' : ''}`}
+              >
+                Trips
+              </Link>
+              <Link
+                to="/travelers"
+                className={`nav-item ${isActivePath('/travelers') ? 'active' : ''}`}
+              >
+                Travelers
+              </Link>
+            </nav>
+          )}
         </div>
 
         {/* Right side controls */}
@@ -126,17 +132,34 @@ const Header: React.FC = () => {
             </div>
           ) : (
             <div className="auth-buttons">
-              <Link to="/login" className="btn-secondary">
+              <button 
+                onClick={() => setShowLoginModal(true)} 
+                className="btn-secondary"
+              >
                 Sign In
-              </Link>
-              <Link to="/register" className="btn-primary">
+              </button>
+              <button 
+                onClick={() => setShowLoginModal(true)} 
+                className="btn-primary"
+              >
                 Sign Up
-              </Link>
+              </button>
             </div>
           )}
         </div>
       </div>
     </header>
+
+    {/* Login Modal */}
+    <LoginModal
+      isOpen={showLoginModal}
+      onClose={() => setShowLoginModal(false)}
+      onSuccess={() => {
+        setShowLoginModal(false);
+        navigate('/chat');
+      }}
+    />
+    </>
   );
 };
 

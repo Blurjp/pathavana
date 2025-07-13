@@ -531,10 +531,13 @@ const UnifiedTravelRequest: React.FC = () => {
                 <p><strong>Something went wrong</strong></p>
                 <p>{messageError}</p>
                 <button
-                  onClick={() => window.location.reload()}
+                  onClick={() => {
+                    // Instead of reloading, try to resend the last message or create new session
+                    navigate('/chat');
+                  }}
                   className="btn-secondary"
                 >
-                  Retry
+                  Start New Chat
                 </button>
               </div>
             </div>

@@ -93,7 +93,7 @@ class UserSession(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
     # Relationships
-    user = relationship("User", backref="sessions")
+    user = relationship("User", back_populates="sessions")
     
     __table_args__ = (
         Index('idx_session_user_active', 'user_id', 'is_active'),
@@ -173,7 +173,7 @@ class AuthenticationLog(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
     
     # Relationships
-    user = relationship("User", foreign_keys=[user_id], backref="auth_logs")
+    user = relationship("User", foreign_keys=[user_id], back_populates="auth_logs")
     session = relationship("UserSession", backref="auth_logs")
     
     __table_args__ = (
@@ -221,7 +221,7 @@ class OAuthConnection(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
     # Relationships
-    user = relationship("User", backref="oauth_connections")
+    user = relationship("User", back_populates="oauth_connections")
     
     __table_args__ = (
         Index('idx_oauth_provider_user', 'provider', 'provider_user_id', unique=True),
@@ -259,7 +259,7 @@ class PasswordResetToken(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
     # Relationships
-    user = relationship("User", backref="password_reset_tokens")
+    user = relationship("User", back_populates="password_reset_tokens")
     
     __table_args__ = (
         Index('idx_reset_token_expires', 'expires_at', 'used'),

@@ -234,16 +234,19 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         
         # Public endpoints that don't require authentication
         self.public_endpoints = [
-            "/api/auth/login",
-            "/api/auth/register",
-            "/api/auth/google",
-            "/api/auth/facebook",
-            "/api/auth/microsoft",
-            "/api/auth/forgot-password",
-            "/api/auth/reset-password",
-            "/api/auth/verify-email",
-            "/api/auth/oauth-url",
-            "/api/health",
+            "/api/v1/auth/login",
+            "/api/v1/auth/register",
+            "/api/v1/auth/google",
+            "/api/v1/auth/google-login",
+            "/api/v1/auth/facebook",
+            "/api/v1/auth/microsoft",
+            "/api/v1/auth/forgot-password",
+            "/api/v1/auth/reset-password",
+            "/api/v1/auth/verify-email",
+            "/api/v1/auth/oauth-url",
+            "/api/v1/health",
+            "/health",
+            "/",
             "/docs",
             "/redoc",
             "/openapi.json"
@@ -251,6 +254,10 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Process request with authentication check."""
+        # Allow OPTIONS requests through for CORS preflight
+        if request.method == "OPTIONS":
+            return await call_next(request)
+        
         # Check if path requires authentication
         if not self._requires_auth(request.url.path):
             return await call_next(request)

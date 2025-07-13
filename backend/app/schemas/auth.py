@@ -216,7 +216,8 @@ class UserResponse(BaseModel):
     last_login_at: Optional[datetime]
     
     class Config:
-        orm_mode = True
+        from_attributes = True
+        orm_mode = True  # For backward compatibility
         schema_extra = {
             "example": {
                 "id": 1,

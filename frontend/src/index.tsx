@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { handleGlobalError, handleUnhandledRejection } from './utils/errorHandler';
 import './styles/index.css';
+import './styles/animations.css';
 
 // Set up global error handlers
 window.addEventListener('error', handleGlobalError);
@@ -13,9 +14,7 @@ const root = ReactDOM.createRoot(
 );
 
 root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
+  <App />
 );
 
 // Performance monitoring

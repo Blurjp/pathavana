@@ -76,7 +76,7 @@ from ..schemas.auth import (
 from ..services.email_service import email_service
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/auth", tags=["authentication"])
+router = APIRouter(tags=["authentication"])
 
 
 class OAuthProviderConfig:
@@ -494,15 +494,24 @@ async def google_oauth(
     Exchanges Google authorization code for user tokens.
     Creates new account if user doesn't exist.
     """
-    return await oauth_login(
-        "google",
-        oauth_data,
-        request,
-        db,
-        settings.GOOGLE_CLIENT_ID,
-        settings.GOOGLE_CLIENT_SECRET,
-        OAuthProviderConfig.GOOGLE
-    )
+    try:
+        return await oauth_login(
+            "google",
+            oauth_data,
+            request,
+            db,
+            settings.GOOGLE_CLIENT_ID,
+            settings.GOOGLE_CLIENT_SECRET,
+            OAuthProviderConfig.GOOGLE
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Google OAuth error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="OAuth authentication failed"
+        )
 
 
 @router.post("/facebook", response_model=TokenResponse)
@@ -563,6 +572,19 @@ async def oauth_login(
     """
     Common OAuth login logic for all providers.
     """
+    # Dynamically reload credentials
+    import os
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+    
+    # Get fresh credentials
+    if provider == "google":
+        client_id = os.getenv('GOOGLE_CLIENT_ID', client_id)
+        client_secret = os.getenv('GOOGLE_CLIENT_SECRET', client_secret)
+    elif provider == "facebook":
+        client_id = os.getenv('FACEBOOK_APP_ID', client_id)
+        client_secret = os.getenv('FACEBOOK_APP_SECRET', client_secret)
+    
     if not client_id or not client_secret:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
@@ -571,6 +593,8 @@ async def oauth_login(
     
     # Verify state parameter (CSRF protection)
     # In production, verify against stored state
+    
+    logger.info(f"OAuth {provider} login attempt - code: {oauth_data.code[:20]}..., redirect_uri: {oauth_data.redirect_uri}")
     
     async with httpx.AsyncClient() as client:
         # Exchange code for tokens
@@ -581,6 +605,8 @@ async def oauth_login(
             "client_id": client_id,
             "client_secret": client_secret
         }
+        
+        logger.debug(f"Token exchange request to {provider_config['token_url']}")
         
         token_response = await client.post(
             provider_config["token_url"],
@@ -595,10 +621,10 @@ async def oauth_login(
             )
         
         tokens = token_response.json()
-        access_token = tokens.get("access_token")
+        oauth_access_token = tokens.get("access_token")
         
         # Get user info
-        headers = {"Authorization": f"Bearer {access_token}"}
+        headers = {"Authorization": f"Bearer {oauth_access_token}"}
         user_response = await client.get(
             provider_config["user_info_url"],
             headers=headers,
@@ -645,7 +671,7 @@ async def oauth_login(
         user = oauth_connection.user
         
         # Update OAuth tokens
-        oauth_connection.access_token = access_token
+        oauth_connection.access_token = oauth_access_token
         oauth_connection.refresh_token = tokens.get("refresh_token")
         oauth_connection.last_used = datetime.utcnow()
         
@@ -663,7 +689,7 @@ async def oauth_login(
                 provider=provider,
                 provider_user_id=provider_user_id,
                 provider_email=email,
-                access_token=access_token,
+                access_token=oauth_access_token,
                 refresh_token=tokens.get("refresh_token"),
                 provider_data=user_info
             )
@@ -702,7 +728,7 @@ async def oauth_login(
                 provider=provider,
                 provider_user_id=provider_user_id,
                 provider_email=email,
-                access_token=access_token,
+                access_token=oauth_access_token,
                 refresh_token=tokens.get("refresh_token"),
                 provider_data=user_info
             )
@@ -711,33 +737,43 @@ async def oauth_login(
     # Update last login
     user.last_login_at = datetime.utcnow()
     
-    # Create session
-    session_id, access_token, refresh_token = await create_user_session(
-        user.id,
-        request,
-        db,
-        oauth_data.device_info
-    )
-    
-    await db.commit()
-    
-    # Log OAuth login
-    await log_auth_event(
-        AuthEventType.OAUTH_LOGIN,
-        user.id,
-        request,
-        db,
-        metadata={"provider": provider},
-        session_id=session_id
-    )
-    
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        user=UserResponse.from_orm(user)
-    )
+    try:
+        # Create session
+        session_id, access_token, refresh_token = await create_user_session(
+            user.id,
+            request,
+            db,
+            oauth_data.device_info
+        )
+        
+        await db.commit()
+        
+        # Log OAuth login
+        await log_auth_event(
+            AuthEventType.OAUTH_LOGIN,
+            user.id,
+            request,
+            db,
+            metadata={"provider": provider},
+            session_id=session_id
+        )
+        
+        logger.info(f"OAuth {provider} login successful for user {user.id}")
+        
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer",
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            user=UserResponse.from_orm(user)
+        )
+    except Exception as e:
+        logger.error(f"OAuth {provider} session/token creation failed: {str(e)}", exc_info=True)
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create user session"
+        )
 
 
 @router.get("/me", response_model=UserResponse)
@@ -1178,11 +1214,16 @@ async def get_oauth_url(
     # Get provider config
     provider_config = getattr(OAuthProviderConfig, provider.upper())
     
-    # Get client ID
+    # Dynamically load environment variables
+    import os
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+    
+    # Get client ID from environment
     client_ids = {
-        "google": settings.GOOGLE_CLIENT_ID,
-        "facebook": settings.FACEBOOK_APP_ID,
-        "microsoft": settings.MICROSOFT_CLIENT_ID
+        "google": os.getenv('GOOGLE_CLIENT_ID'),
+        "facebook": os.getenv('FACEBOOK_APP_ID'),
+        "microsoft": os.getenv('MICROSOFT_CLIENT_ID')
     }
     
     client_id = client_ids.get(provider)

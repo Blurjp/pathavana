@@ -4,6 +4,11 @@ Core configuration settings for Pathavana backend application.
 
 import os
 from typing import Any, Dict, List, Optional, Union
+from functools import lru_cache
+from dotenv import load_dotenv
+
+# Reload environment variables on import
+load_dotenv(override=True)
 
 # Try to import pydantic, fall back to basic config if not available
 try:
