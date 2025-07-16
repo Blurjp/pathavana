@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test New Chat</title>
+</head>
+<body>
+    <h1>Test New Chat Functionality</h1>
+    <button id="testBtn">Test Create Session</button>
+    <div id="result"></div>
+    
+    <script>
+        async function testNewChat() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p>Testing...</p>';
+            
+            try {
+                // Create a new session
+                const response = await fetch('http://localhost:8001/api/v1/travel/sessions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: 'Hello, I want to plan a trip',
+                        source: 'web'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const sessionId = data.data.session_id;
+                    const initialResponse = data.data.initial_response;
+                    
+                    // Save to localStorage like the frontend does
+                    const initialMessages = [
+                        {
+                            id: `msg-${Date.now()}-1`,
+                            content: 'Hello, I want to plan a trip',
+                            role: 'user',
+                            timestamp: new Date().toISOString(),
+                        },
+                        {
+                            id: `msg-${Date.now()}-2`,
+                            content: initialResponse,
+                            role: 'assistant',
+                            timestamp: new Date().toISOString(),
+                            metadata: data.data.metadata,
+                        }
+                    ];
+                    
+                    const messageHistoryKey = `pathavana_messages_${sessionId}`;
+                    localStorage.setItem(messageHistoryKey, JSON.stringify(initialMessages));
+                    localStorage.setItem('currentSessionId', sessionId);
+                    
+                    resultDiv.innerHTML = `
+                        <h2>Success!</h2>
+                        <p>Session ID: ${sessionId}</p>
+                        <p>Initial Response: ${initialResponse}</p>
+                        <p>Messages saved to localStorage with key: ${messageHistoryKey}</p>
+                        <h3>Check localStorage:</h3>
+                        <pre>${JSON.stringify(initialMessages, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<p>Error: ${JSON.stringify(data)}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        }
+        
+        document.getElementById('testBtn').addEventListener('click', testNewChat);
+    </script>
+</body>
+</html>

@@ -115,7 +115,7 @@ start_both() {
                     
                     echo -e "${GREEN}✅ Both services started in separate windows${NC}"
                     echo -e "${BLUE}📍 Frontend: http://localhost:3000${NC}"
-                    echo -e "${BLUE}📍 Backend: http://localhost:8000${NC}"
+                    echo -e "${BLUE}📍 Backend: http://localhost:8001${NC}"
                 else
                     echo -e "${YELLOW}⚠️  Auto-opening terminals not supported on this system${NC}"
                     echo -e "${YELLOW}Please run these commands in separate terminals:${NC}"

@@ -45,6 +45,8 @@ export interface EnhancedChatMessage {
     entities?: Entity[];
     actions?: Action[];
     attachments?: Attachment[];
+    suggestions?: string[];
+    actionRequired?: boolean;
   };
 }
 

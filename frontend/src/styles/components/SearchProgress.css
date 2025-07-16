@@ -1,0 +1,99 @@
+.search-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  margin: 8px 0;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  background-color: var(--color-background-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.search-progress.searching {
+  background-color: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: rgb(59, 130, 246);
+}
+
+.search-progress.found {
+  background-color: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: rgb(34, 197, 94);
+  cursor: pointer;
+}
+
+.search-progress.found:hover {
+  background-color: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.5);
+}
+
+.search-progress.none {
+  background-color: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.3);
+  color: rgb(251, 191, 36);
+}
+
+.search-progress.error {
+  background-color: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: rgb(239, 68, 68);
+}
+
+.search-icon {
+  font-size: 18px;
+}
+
+.search-message {
+  flex: 1;
+}
+
+.search-action {
+  font-size: 12px;
+  opacity: 0.8;
+  font-style: italic;
+}
+
+.search-spinner {
+  display: inline-flex;
+  align-items: center;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .search-progress {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .search-progress.searching {
+    background-color: rgba(59, 130, 246, 0.2);
+  }
+  
+  .search-progress.found {
+    background-color: rgba(34, 197, 94, 0.2);
+  }
+  
+  .search-progress.none {
+    background-color: rgba(251, 191, 36, 0.2);
+  }
+  
+  .search-progress.error {
+    background-color: rgba(239, 68, 68, 0.2);
+  }
+}

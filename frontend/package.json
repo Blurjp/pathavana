@@ -11,7 +11,6 @@
     "@types/node": "^16.18.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "axios": "^1.4.0",
     "lucide-react": "^0.525.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -27,6 +26,12 @@
     "test:watch": "craco test --watchAll",
     "test:coverage": "craco test --coverage --watchAll=false",
     "test:ci": "craco test --coverage --ci --reporters=jest-junit --reporters=default --watchAll=false",
+    "test:e2e": "node src/tests/e2e/PathavanaUITest.js",
+    "test:selenium": "node runSeleniumTest.js",
+    "test:trip-plan": "node src/tests/e2e/TripPlanCreationTest.js",
+    "test:trip-plan-full": "node runTripPlanTest.js",
+    "test:simple": "node src/tests/e2e/SimpleTripPlanTest.js",
+    "test:v2": "node src/tests/e2e/TripPlanTestV2.js",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
@@ -51,9 +56,14 @@
     "@axe-core/react": "^4.8.4",
     "@craco/craco": "^7.1.0",
     "@faker-js/faker": "^8.4.1",
+    "@types/selenium-webdriver": "^4.1.28",
     "@types/uuid": "^9.0.2",
+    "axios": "^1.10.0",
+    "chromedriver": "^138.0.2",
+    "eslint-webpack-plugin": "^5.0.2",
     "jest-junit": "^16.0.0",
     "msw": "^2.0.11",
+    "selenium-webdriver": "^4.34.0",
     "uuid": "^9.0.0"
   },
   "jest": {

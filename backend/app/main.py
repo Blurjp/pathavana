@@ -16,7 +16,8 @@ from datetime import datetime
 from .core.config import settings
 from .core.database import init_db, close_db, get_db
 from .core.logging_config import setup_logging, get_logger
-from .api import travel_unified, bookings, travelers, data_compliance, auth_simple, auth_v2, config
+from .api import travel_unified, bookings, data_compliance, auth_simple, auth_v2, config, travelers_v2
+from .api.endpoints import user_profile, user_profile_debug
 from .middleware import (
     RateLimitMiddleware,
     SecurityHeadersMiddleware,
@@ -210,9 +211,20 @@ app.include_router(
 )
 
 app.include_router(
-    travelers.router,
-    prefix=f"{settings.API_V1_STR}/travelers",
+    travelers_v2.router,
     tags=["travelers"]
+)
+
+# User profile routes
+app.include_router(
+    user_profile.router,
+    tags=["user-profile"]
+)
+
+# Debug endpoints
+app.include_router(
+    user_profile_debug.router,
+    tags=["debug"]
 )
 
 app.include_router(

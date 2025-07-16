@@ -103,13 +103,14 @@ class TripContext:
         
         # Traveler count conflicts
         new_travelers = new_data.get("travelers", {})
+        current_travelers = self.travelers or {"adults": 1, "children": 0, "infants": 0}
         for traveler_type in ["adults", "children", "infants"]:
             if new_travelers.get(traveler_type) is not None:
-                if new_travelers[traveler_type] != self.travelers.get(traveler_type, 0):
+                if new_travelers[traveler_type] != current_travelers.get(traveler_type, 0):
                     detected_conflicts.append({
                         "type": ConflictType.TRAVELER_CONFLICT,
                         "field": f"travelers.{traveler_type}",
-                        "existing": self.travelers.get(traveler_type, 0),
+                        "existing": current_travelers.get(traveler_type, 0),
                         "new": new_travelers[traveler_type],
                         "severity": "medium"
                     })
@@ -468,8 +469,20 @@ class TripContextService:
         Returns:
             Merged context
         """
-        # Convert to TripContext for advanced handling
-        context = TripContext.from_dict(existing_context) if existing_context else TripContext()
+        # Handle simple context format from plan_data
+        if existing_context and "destination" in existing_context:
+            # Convert simple format to TripContext format
+            trip_context_data = {
+                "destination_city": existing_context.get("destination"),
+                "start_date": existing_context.get("dates", {}).get("start") if isinstance(existing_context.get("dates"), dict) else None,
+                "end_date": existing_context.get("dates", {}).get("end") if isinstance(existing_context.get("dates"), dict) else None,
+                "travelers": existing_context.get("travelers") or {"adults": 1, "children": 0, "infants": 0},
+                "budget": existing_context.get("budget")
+            }
+            context = TripContext.from_dict(trip_context_data)
+        else:
+            # Convert to TripContext for advanced handling
+            context = TripContext.from_dict(existing_context) if existing_context else TripContext()
         
         # Detect and handle conflicts
         conflicts = context.detect_conflicts(new_entities)
@@ -478,8 +491,8 @@ class TripContextService:
             # Use most recent strategy by default for synchronous method
             context.resolve_conflicts(conflicts, ResolutionStrategy.MOST_RECENT)
         
-        # Apply updates
-        merged = existing_context.copy() if existing_context else {}
+        # Apply updates - use context dict representation
+        merged = context.to_dict()
         
         # Merge destinations
         if new_entities.get("destinations"):
@@ -497,8 +510,9 @@ class TripContextService:
         
         # Merge passengers (new info overrides existing)
         if new_entities.get("travelers"):
+            existing_travelers = merged.get("travelers") or {}
             merged["travelers"] = {
-                **merged.get("travelers", {}),
+                **existing_travelers,
                 **new_entities["travelers"]
             }
         
@@ -523,7 +537,21 @@ class TripContextService:
         # Add timestamp for context freshness
         merged["last_updated"] = datetime.utcnow().isoformat()
         
-        return merged
+        # Convert back to simple format for plan_data compatibility
+        simple_context = {
+            "destination": merged.get("destination_city"),
+            "dates": {
+                "start": merged.get("start_date"),
+                "end": merged.get("end_date")
+            } if merged.get("start_date") or merged.get("end_date") else None,
+            "travelers": merged.get("travelers"),
+            "budget": merged.get("budget")
+        }
+        
+        # Remove None values
+        simple_context = {k: v for k, v in simple_context.items() if v is not None}
+        
+        return simple_context
     
     def validate_trip_context(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -685,13 +713,21 @@ class TripContextService:
                         continue
                     
                     # Resolve destination
-                    resolved = self.destination_resolver.resolve_destination(dest_text)
-                    if resolved.get("resolved"):
-                        destinations.append({
-                            "original_text": dest_text,
-                            "resolved": resolved,
-                            "type": "destination"
-                        })
+                    # TODO: Make _extract_destinations async to support destination resolution
+                    # resolved = await self.destination_resolver.resolve_destination(dest_text)
+                    # if resolved.get("resolved"):
+                    #     destinations.append({
+                    #         "original_text": dest_text,
+                    #         "resolved": resolved,
+                    #         "type": "destination"
+                    #     })
+                    
+                    # For now, just add the destination without resolution
+                    destinations.append({
+                        "original_text": dest_text,
+                        "resolved": {"place_name": dest_text, "resolved": True},
+                        "type": "destination"
+                    })
         
         return destinations
     

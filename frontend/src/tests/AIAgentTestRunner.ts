@@ -124,7 +124,7 @@ export class AIAgentTestRunner {
           const entities = this.nluEngine.extractEntities(test.input);
           const filteredEntities = entities.filter(e => e.type === test.expectedType);
           
-          if (filteredEntities.length < test.expectedCount) {
+          if (test.expectedCount !== undefined && filteredEntities.length < test.expectedCount) {
             throw new Error(`Expected at least ${test.expectedCount} ${test.expectedType} entities, got ${filteredEntities.length}`);
           }
 
@@ -150,7 +150,7 @@ export class AIAgentTestRunner {
             content: 'I want to go to Tokyo',
             timestamp: new Date(),
             metadata: {
-              entities: [{ type: 'destination', value: 'Tokyo', confidence: 0.9, position: [0, 5] }]
+              entities: [{ type: 'destination' as const, value: 'Tokyo', confidence: 0.9, position: [0, 5] as [number, number] }]
             }
           },
           {
@@ -367,7 +367,7 @@ export class AIAgentTestRunner {
       () => {
         const context = {
           state: ConversationState.GATHERING_REQUIREMENTS,
-          entities: [{ type: 'destination', value: 'Tokyo', confidence: 0.9, position: [0, 5] }],
+          entities: [{ type: 'destination' as const, value: 'Tokyo', confidence: 0.9, position: [0, 5] as [number, number] }],
           missingFields: ['dates'],
           lastIntent: null,
           clarificationNeeded: true
@@ -455,7 +455,7 @@ export class AIAgentTestRunner {
             content: `Message ${i}`,
             timestamp: new Date(),
             metadata: {
-              entities: [{ type: 'destination', value: `City${i}`, confidence: 0.8, position: [0, 5] }]
+              entities: [{ type: 'destination' as const, value: `City${i}`, confidence: 0.8, position: [0, 5] as [number, number] }]
             }
           });
         }

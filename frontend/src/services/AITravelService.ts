@@ -47,7 +47,7 @@ export class TravelAIService implements AITravelService {
       };
 
       // Send message to backend API
-      const response = await apiClient.post(`/api/travel/sessions/${sessionId}/chat`, {
+      const response = await apiClient.post(`/api/v1/travel/sessions/${sessionId}/chat`, {
         message: message.content,
         metadata: {
           intent: intent.type,
@@ -84,7 +84,7 @@ export class TravelAIService implements AITravelService {
     
     // Sync context with backend
     try {
-      await apiClient.put(`/api/travel/sessions/${sessionId}/context`, {
+      await apiClient.put(`/api/v1/travel/sessions/${sessionId}/context`, {
         context: {
           state: context.state,
           entities: context.entities,
@@ -160,7 +160,7 @@ export class TravelAIService implements AITravelService {
     searchResults: any,
     context: ConversationContext
   ): CardResponse {
-    const cards = [];
+    const cards: any[] = [];
 
     // Process flight results
     if (searchResults.flights) {
@@ -258,7 +258,7 @@ export class TravelAIService implements AITravelService {
 
   private async addToPlan(payload: any, context: ConversationContext): Promise<ActionResult> {
     try {
-      const response = await apiClient.post('/api/travel/plan/items', payload);
+      const response = await apiClient.post('/api/v1/travel/plan/items', payload);
       return {
         success: true,
         data: response.data
@@ -289,7 +289,7 @@ export class TravelAIService implements AITravelService {
         Object.assign(searchQuery, refinedQuery);
       }
 
-      const response = await apiClient.post('/api/travel/search', searchQuery);
+      const response = await apiClient.post('/api/v1/travel/search', searchQuery);
       return {
         success: true,
         data: response.data
@@ -304,7 +304,7 @@ export class TravelAIService implements AITravelService {
 
   private async bookItem(payload: any, context: ConversationContext): Promise<ActionResult> {
     try {
-      const response = await apiClient.post('/api/travel/bookings', payload);
+      const response = await apiClient.post('/api/v1/travel/bookings', payload);
       return {
         success: true,
         data: response.data
@@ -319,7 +319,7 @@ export class TravelAIService implements AITravelService {
 
   private async modifyPlan(payload: any, context: ConversationContext): Promise<ActionResult> {
     try {
-      const response = await apiClient.put(`/api/travel/plan/${payload.planId}`, payload.changes);
+      const response = await apiClient.put(`/api/v1/travel/plan/${payload.planId}`, payload.changes);
       return {
         success: true,
         data: response.data
@@ -334,7 +334,7 @@ export class TravelAIService implements AITravelService {
 
   private async getRecommendations(payload: any, context: ConversationContext): Promise<ActionResult> {
     try {
-      const response = await apiClient.get('/api/travel/recommendations', {
+      const response = await apiClient.get('/api/v1/travel/recommendations', {
         params: {
           destination: payload.destination,
           type: payload.type,
@@ -371,7 +371,7 @@ export class TravelAIService implements AITravelService {
     onChunk: (chunk: string) => void
   ): Promise<void> {
     const eventSource = new EventSource(
-      `/api/travel/sessions/${sessionId}/chat/stream?message=${encodeURIComponent(message)}`
+      `/api/v1/travel/sessions/${sessionId}/chat/stream?message=${encodeURIComponent(message)}`
     );
 
     eventSource.onmessage = (event) => {

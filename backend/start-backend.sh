@@ -79,30 +79,30 @@ else
     echo "⚠️ Alembic not configured - skipping database migrations"
 fi
 
-# Kill any process running on port 8000
-echo "🔍 Checking for processes on port 8000..."
-PIDS=$(lsof -ti :8000)
+# Kill any process running on port 8001
+echo "🔍 Checking for processes on port 8001..."
+PIDS=$(lsof -ti :8001)
 
 if [ ! -z "$PIDS" ]; then
-    echo "⚠️  Found process(es) on port 8000: $PIDS"
+    echo "⚠️  Found process(es) on port 8001: $PIDS"
     echo "🛑 Killing process(es)..."
     kill -9 $PIDS 2>/dev/null
     sleep 1
-    echo "✅ Port 8000 is now free"
+    echo "✅ Port 8001 is now free"
 else
-    echo "✅ Port 8000 is already free"
+    echo "✅ Port 8001 is already free"
 fi
 
 # Start the server
 echo "🚀 Starting FastAPI server..."
-echo "📍 Server will be available at: http://localhost:8000"
-echo "📚 API documentation at: http://localhost:8000/api/v1/docs"
+echo "📍 Server will be available at: http://localhost:8001"
+echo "📚 API documentation at: http://localhost:8001/api/v1/docs"
 echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""
 
 # Run with uvicorn
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 
 echo ""
 echo "👋 Server stopped"

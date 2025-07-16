@@ -122,12 +122,12 @@ echo "========================================"
 
 if [ "$MODE" = "production" ]; then
     echo -e "${GREEN}🎉 Starting FastAPI Production Server${NC}"
-    echo -e "${YELLOW}📍 API Documentation: http://localhost:8000/api/docs${NC}"
-    echo -e "${YELLOW}📍 Health Check: http://localhost:8000/api/health${NC}"
+    echo -e "${YELLOW}📍 API Documentation: http://localhost:8001/api/docs${NC}"
+    echo -e "${YELLOW}📍 Health Check: http://localhost:8001/api/health${NC}"
     python3 app/main_production.py
 else
     echo -e "${YELLOW}🔧 Starting Fallback Server${NC}"
-    echo -e "${YELLOW}📍 API: http://localhost:8000${NC}"
-    echo -e "${YELLOW}📍 Health: http://localhost:8000/api/health${NC}"
+    echo -e "${YELLOW}📍 API: http://localhost:8001${NC}"
+    echo -e "${YELLOW}📍 Health: http://localhost:8001/api/health${NC}"
     python3 app/main_production.py
 fi

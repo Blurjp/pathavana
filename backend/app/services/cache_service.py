@@ -15,7 +15,7 @@ import json
 import hashlib
 import os
 import pickle
-from typing import Any, Optional, Dict, Union
+from typing import Any, Optional, Dict, Union, List
 from datetime import datetime, timedelta
 import aiofiles
 import logging
@@ -170,6 +170,14 @@ class CacheService:
             logger.error(f"Error writing to cache: {e}")
             self._stats["errors"] += 1
             return False
+    
+    async def get_cached_response(self, key: str) -> Optional[Any]:
+        """Get a cached response (alias for get)."""
+        return await self.get(key, CacheType.LLM_RESPONSES)
+    
+    async def cache_response(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
+        """Cache a response (alias for set)."""
+        return await self.set(key, value, ttl=ttl or CacheType.LLM_RESPONSES.ttl)
     
     async def delete(self, key: str, cache_type: Optional[CacheType] = None) -> bool:
         """

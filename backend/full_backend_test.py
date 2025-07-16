@@ -12,7 +12,7 @@ import time
 from typing import Dict, Any, Optional
 
 # Test configuration
-BASE_URL = "http://localhost:8000"
+BASE_URL = "http://localhost:8001"
 API_V1_STR = "/api/v1"
 
 
@@ -322,7 +322,7 @@ async def main():
 
 if __name__ == "__main__":
     print("Pathavana Backend Tester v1.0")
-    print("Make sure the backend server is running on http://localhost:8000")
+    print("Make sure the backend server is running on http://localhost:8001")
     print()
     
     try:

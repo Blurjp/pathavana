@@ -6,7 +6,7 @@
  */
 
 import '@testing-library/jest-dom';
-import { configure } from '@testing-library/react';
+import { configure, act } from '@testing-library/react';
 import React from 'react';
 // import { server } from './tests/utils/mockServer';
 

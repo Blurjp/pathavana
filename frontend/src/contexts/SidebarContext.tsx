@@ -3,7 +3,7 @@ import { UIState, SelectedItems } from '../types';
 
 interface SidebarContextType extends UIState {
   toggleSidebar: () => void;
-  setActiveTab: (tab: 'flights' | 'hotels' | 'activities') => void;
+  setActiveTab: (tab: 'flights' | 'hotels' | 'activities' | 'trip') => void;
   setLoading: (loading: boolean) => void;
   toggleItemSelection: (type: 'flights' | 'hotels' | 'activities', itemId: string) => void;
   clearSelections: () => void;
@@ -35,10 +35,10 @@ export const SidebarProvider: React.FC<SidebarProviderProps> = ({ children }) =>
     }));
   };
 
-  const setActiveTab = (tab: 'flights' | 'hotels' | 'activities') => {
+  const setActiveTab = (tab: 'flights' | 'hotels' | 'activities' | 'trip') => {
     setUiState(prev => ({
       ...prev,
-      activeTab: tab,
+      activeTab: tab as any, // Type assertion needed until UIState is updated
     }));
   };
 

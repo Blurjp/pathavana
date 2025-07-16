@@ -57,6 +57,48 @@ class AzureOpenAIService(BaseLLMService):
         )
         self.deployment_name = settings.AZURE_OPENAI_DEPLOYMENT_NAME or "gpt-4"
         self.model = settings.LLM_MODEL
+    
+    async def generate_response(
+        self, 
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int = 1000,
+        **kwargs
+    ) -> str:
+        """Generate a response from Azure OpenAI."""
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.deployment_name,
+                messages=messages,
+                temperature=kwargs.get("temperature", temperature),
+                max_tokens=kwargs.get("max_tokens", max_tokens),
+                **{k: v for k, v in kwargs.items() if k not in ["temperature", "max_tokens"]}
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.error(f"Azure OpenAI error: {e}")
+            raise
+    
+    async def stream_response(
+        self, 
+        messages: List[Dict[str, str]], 
+        **kwargs
+    ) -> AsyncGenerator[str, None]:
+        """Stream a response from Azure OpenAI."""
+        try:
+            stream = await self.client.chat.completions.create(
+                model=self.deployment_name,
+                messages=messages,
+                stream=True,
+                **kwargs
+            )
+            
+            async for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+        except Exception as e:
+            logger.error(f"Azure OpenAI streaming error: {e}")
+            raise
 
 
 class OpenAIService(BaseLLMService):
@@ -306,10 +348,7 @@ class LLMService:
         """
         # Check cache
         cache_key = f"suggestions:{str(session_data)[:200]}"
-        cached_suggestions = await self.cache_service.get_cached_response(
-            cache_key,
-            ttl=1800  # 30 minutes cache
-        )
+        cached_suggestions = await self.cache_service.get_cached_response(cache_key)
         if cached_suggestions:
             return cached_suggestions[:max_suggestions]
         

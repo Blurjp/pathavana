@@ -8,6 +8,28 @@ import os
 from pathlib import Path
 from typing import Dict, Any
 
+
+class NoiseFilter(logging.Filter):
+    """Filter out noisy log messages for specific endpoints."""
+    
+    def __init__(self, excluded_paths=None):
+        super().__init__()
+        self.excluded_paths = excluded_paths or [
+            "/api/v1/frontend-config",
+            "/health",
+            "/api/health",
+            "/favicon.ico"
+        ]
+    
+    def filter(self, record):
+        """Return False to filter out the record, True to keep it."""
+        # Check if the log message contains any of the excluded paths
+        message = record.getMessage()
+        for path in self.excluded_paths:
+            if path in message:
+                return False
+        return True
+
 def setup_logging(log_dir: str = "logs", log_level: str = "INFO") -> None:
     """
     Setup logging configuration for the application.
@@ -29,6 +51,11 @@ def setup_logging(log_dir: str = "logs", log_level: str = "INFO") -> None:
     config: Dict[str, Any] = {
         "version": 1,
         "disable_existing_loggers": False,
+        "filters": {
+            "noise_filter": {
+                "()": NoiseFilter
+            }
+        },
         "formatters": {
             "detailed": {
                 "format": "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s",
@@ -91,7 +118,8 @@ def setup_logging(log_dir: str = "logs", log_level: str = "INFO") -> None:
             "uvicorn.access": {
                 "level": "INFO",
                 "handlers": ["console", "file_access"],
-                "propagate": False
+                "propagate": False,
+                "filters": ["noise_filter"]
             },
             "uvicorn.error": {
                 "level": "INFO",

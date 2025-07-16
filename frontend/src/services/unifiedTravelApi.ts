@@ -11,7 +11,7 @@ import {
 } from '../types';
 
 export class UnifiedTravelApi {
-  private baseUrl = '/api/travel';
+  private baseUrl = '/api/v1/travel';
 
   // Chat-based travel planning
   async sendChatMessage(
@@ -37,11 +37,26 @@ export class UnifiedTravelApi {
   }
 
   // Session management
-  async createSession(initialMessage?: string): Promise<ApiResponse<{ sessionId: string }>> {
+  async createSession(initialMessage?: string): Promise<ApiResponse<{ 
+    sessionId: string;
+    session_id: string;
+    initial_response?: string;
+    metadata?: any;
+    trip_context?: any;
+    status?: string;
+  }>> {
     return apiClient.post(`${this.baseUrl}/sessions`, {
       message: initialMessage || 'Hello, I want to plan a trip',
       source: 'web'
     });
+  }
+  
+  async createEmptySession(): Promise<ApiResponse<{ 
+    session_id: string;
+    status: string;
+    created_at: string;
+  }>> {
+    return apiClient.post(`${this.baseUrl}/sessions/new`, {});
   }
 
   async getSession(sessionId: string): Promise<ApiResponse<TravelSession>> {
@@ -53,7 +68,7 @@ export class UnifiedTravelApi {
       const transformedSession: TravelSession = {
         id: sessionData.session_id || sessionId,
         userId: sessionData.user_id,
-        messages: sessionData.session_data?.chat_messages || [],
+        messages: sessionData.session_data?.conversation_history || [],
         context: {
           currentRequest: sessionData.session_data?.parsed_intent,
           searchHistory: sessionData.session_data?.search_history || [],

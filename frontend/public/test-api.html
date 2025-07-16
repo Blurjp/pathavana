@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Backend API</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .result { margin: 10px 0; padding: 10px; border: 1px solid #ddd; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        pre { white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>Test Backend API Connection</h1>
+    <p>This page should be accessed via http://localhost:3000/test-api.html to avoid CORS issues</p>
+    
+    <button onclick="testAPI()">Test Create Session API</button>
+    
+    <div id="results"></div>
+    
+    <script>
+        async function testAPI() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<div class="result">Testing...</div>';
+            
+            try {
+                const response = await fetch('http://localhost:8001/api/v1/travel/sessions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: 'Hello, I want to plan a trip',
+                        source: 'web'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    results.innerHTML = `
+                        <div class="result success">
+                            <h3>✅ Success!</h3>
+                            <p>Session ID: ${data.data.session_id}</p>
+                            <p>Initial Response: ${data.data.initial_response}</p>
+                            <details>
+                                <summary>Full Response</summary>
+                                <pre>${JSON.stringify(data, null, 2)}</pre>
+                            </details>
+                        </div>
+                    `;
+                } else {
+                    results.innerHTML = `
+                        <div class="result error">
+                            <h3>❌ API Error</h3>
+                            <p>Status: ${response.status}</p>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                results.innerHTML = `
+                    <div class="result error">
+                        <h3>❌ Network Error</h3>
+                        <p>${error.message}</p>
+                        <p>Make sure:</p>
+                        <ul>
+                            <li>Backend is running on http://localhost:8001</li>
+                            <li>This page is accessed via http://localhost:3000/test-api.html</li>
+                        </ul>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

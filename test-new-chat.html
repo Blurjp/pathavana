@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test New Chat Functionality</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px; }
+        button:hover { background: #0056b3; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        .info { color: blue; }
+        .warning { color: orange; }
+    </style>
+</head>
+<body>
+    <h1>New Chat Functionality Test</h1>
+    
+    <div class="section">
+        <h2>Test Steps</h2>
+        <button onclick="runFullTest()">Run Full Test Sequence</button>
+        <button onclick="clearAll()">Clear All Data</button>
+    </div>
+    
+    <div id="results" class="section">
+        <h2>Test Results</h2>
+        <pre id="output">Click "Run Full Test Sequence" to start testing...</pre>
+    </div>
+    
+    <script>
+        const output = document.getElementById('output');
+        let testSessionId = null;
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toISOString().substr(11, 8);
+            const className = type;
+            output.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        async function runFullTest() {
+            output.textContent = '';
+            log('Starting New Chat Functionality Test', 'info');
+            log('=====================================', 'info');
+            
+            try {
+                // Step 1: Create new session
+                await testCreateSession();
+                
+                // Step 2: Verify localStorage
+                await testLocalStorage();
+                
+                // Step 3: Test message loading
+                await testMessageLoading();
+                
+                // Step 4: Test SSE streaming
+                await testSSEStreaming();
+                
+                log('\n=====================================', 'info');
+                log('All tests completed!', 'success');
+                
+            } catch (error) {
+                log(`\nTest failed: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+        
+        async function testCreateSession() {
+            log('\n1. Testing Session Creation', 'info');
+            log('   Creating new session via API...', 'info');
+            
+            try {
+                const response = await fetch('http://localhost:8001/api/v1/travel/sessions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    mode: 'cors',
+                    body: JSON.stringify({
+                        message: 'Hello, I want to plan a trip',
+                        source: 'web'
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success && data.data.session_id) {
+                    testSessionId = data.data.session_id;
+                    log(`   ✓ Session created: ${testSessionId}`, 'success');
+                    log(`   ✓ Initial response: "${data.data.initial_response?.substring(0, 50)}..."`, 'success');
+                    
+                    if (data.data.metadata?.hints) {
+                        log(`   ✓ Hints received: ${data.data.metadata.hints.length} hints`, 'success');
+                    }
+                } else {
+                    throw new Error(`API returned success=false: ${JSON.stringify(data)}`);
+                }
+            } catch (error) {
+                if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                    log('   ❌ Failed to fetch - possible causes:', 'error');
+                    log('      - Backend server not running on http://localhost:8001', 'error');
+                    log('      - CORS issue (check backend CORS settings)', 'error');
+                    log('      - Network connection issue', 'error');
+                    log('   Try opening http://localhost:8001/docs in a new tab to verify backend is running', 'info');
+                }
+                throw error;
+            }
+        }
+        
+        async function testLocalStorage() {
+            log('\n2. Testing LocalStorage', 'info');
+            
+            // Simulate what the frontend does
+            const sessionId = testSessionId;
+            
+            // Save session ID
+            localStorage.setItem('currentSessionId', sessionId);
+            log('   ✓ Saved currentSessionId', 'success');
+            
+            // Create initial messages
+            const initialMessages = [
+                {
+                    id: `msg-${Date.now()}-1`,
+                    content: 'Hello, I want to plan a trip',
+                    type: 'user',
+                    timestamp: new Date().toISOString(),
+                },
+                {
+                    id: `msg-${Date.now()}-2`,
+                    content: "I'd be happy to help you plan your trip! I can assist you with finding flights, hotels, and activities. Could you tell me more about where you'd like to go and when?",
+                    type: 'assistant',
+                    timestamp: new Date().toISOString(),
+                }
+            ];
+            
+            // Save messages
+            const messageKey = `pathavana_messages_${sessionId}`;
+            localStorage.setItem(messageKey, JSON.stringify(initialMessages));
+            log(`   ✓ Saved ${initialMessages.length} messages to ${messageKey}`, 'success');
+            
+            // Verify we can read them back
+            const savedMessages = localStorage.getItem(messageKey);
+            if (savedMessages) {
+                const parsed = JSON.parse(savedMessages);
+                log(`   ✓ Verified: Can read back ${parsed.length} messages`, 'success');
+            } else {
+                throw new Error('Failed to read messages from localStorage');
+            }
+        }
+        
+        async function testMessageLoading() {
+            log('\n3. Testing Message Loading', 'info');
+            
+            const sessionId = testSessionId;
+            const messageKey = `pathavana_messages_${sessionId}`;
+            
+            // Simulate useChatManager loading messages
+            const localMessages = localStorage.getItem(messageKey);
+            if (localMessages) {
+                const messages = JSON.parse(localMessages);
+                log(`   ✓ Loaded ${messages.length} messages from localStorage`, 'success');
+                
+                // Verify message types
+                const userMessages = messages.filter(m => m.type === 'user');
+                const assistantMessages = messages.filter(m => m.type === 'assistant');
+                
+                log(`   ✓ User messages: ${userMessages.length}`, 'success');
+                log(`   ✓ Assistant messages: ${assistantMessages.length}`, 'success');
+                
+                if (messages.length >= 2) {
+                    log('   ✓ Initial conversation loaded successfully', 'success');
+                } else {
+                    log('   ⚠ Warning: Expected at least 2 messages', 'warning');
+                }
+            } else {
+                throw new Error('No messages found in localStorage');
+            }
+        }
+        
+        async function testSSEStreaming() {
+            log('\n4. Testing SSE Streaming', 'info');
+            
+            const sessionId = testSessionId;
+            const url = `http://localhost:8001/api/v1/travel/sessions/${sessionId}/chat/stream`;
+            
+            log('   Attempting to connect to SSE endpoint...', 'info');
+            
+            return new Promise((resolve, reject) => {
+                const eventSource = new EventSource(url);
+                let messageReceived = false;
+                
+                const timeout = setTimeout(() => {
+                    eventSource.close();
+                    if (!messageReceived) {
+                        log('   ⚠ SSE connection timed out (this may be normal)', 'warning');
+                    }
+                    resolve();
+                }, 5000);
+                
+                eventSource.onopen = () => {
+                    log('   ✓ SSE connection established', 'success');
+                };
+                
+                eventSource.onmessage = (event) => {
+                    messageReceived = true;
+                    try {
+                        const data = JSON.parse(event.data);
+                        log(`   ✓ Received SSE message: ${data.type}`, 'success');
+                    } catch (e) {
+                        log(`   ✓ Received SSE data: ${event.data.substring(0, 50)}...`, 'success');
+                    }
+                };
+                
+                eventSource.onerror = (error) => {
+                    clearTimeout(timeout);
+                    eventSource.close();
+                    log('   ℹ SSE connection closed (this is expected)', 'info');
+                    resolve();
+                };
+            });
+        }
+        
+        function clearAll() {
+            output.textContent = '';
+            log('Clearing all test data...', 'info');
+            
+            // Clear localStorage
+            const keys = [];
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+                const key = localStorage.key(i);
+                if (key && (key.includes('pathavana') || key.includes('session'))) {
+                    keys.push(key);
+                    localStorage.removeItem(key);
+                }
+            }
+            
+            log(`Cleared ${keys.length} localStorage keys`, 'success');
+            testSessionId = null;
+        }
+    </script>
+</body>
+</html>

@@ -1,15 +1,17 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useSidebar } from '../contexts/SidebarContext';
 import { SearchResults, FlightOption, HotelOption, ActivityOption, ItineraryItem } from '../types';
 import FlightCard from './FlightCard';
 import HotelCard from './HotelCard';
 import ActivityCard from './ActivityCard';
+import TripPlanPanel from './TripPlanPanel';
 import '../styles/components/SearchResultsSidebar.css';
 
 interface SearchResultsSidebarProps {
   searchResults?: SearchResults;
   isLoading?: boolean;
   onAddToTrip?: (item: ItineraryItem) => void;
+  sessionId?: string;
 }
 
 type SortOption = 'price-asc' | 'price-desc' | 'rating' | 'duration' | 'departure';
@@ -25,7 +27,8 @@ type FilterOptions = {
 const SearchResultsSidebar: React.FC<SearchResultsSidebarProps> = ({
   searchResults,
   isLoading = false,
-  onAddToTrip
+  onAddToTrip,
+  sessionId
 }) => {
   const { 
     sidebarOpen, 
@@ -34,7 +37,8 @@ const SearchResultsSidebar: React.FC<SearchResultsSidebarProps> = ({
     selectedItems, 
     toggleItemSelection,
     clearSelections,
-    getSelectedCount
+    getSelectedCount,
+    toggleSidebar
   } = useSidebar();
 
   const [sortBy, setSortBy] = useState<SortOption>('price-asc');
@@ -55,6 +59,22 @@ const SearchResultsSidebar: React.FC<SearchResultsSidebarProps> = ({
   );
 
   const selectedCount = getSelectedCount();
+
+  // Automatically open sidebar when new results arrive
+  useEffect(() => {
+    if (searchResults && hasResults && !sidebarOpen) {
+      toggleSidebar();
+      
+      // Set active tab based on which results are available
+      if (searchResults.flights && searchResults.flights.length > 0) {
+        setActiveTab('flights');
+      } else if (searchResults.hotels && searchResults.hotels.length > 0) {
+        setActiveTab('hotels');
+      } else if (searchResults.activities && searchResults.activities.length > 0) {
+        setActiveTab('activities');
+      }
+    }
+  }, [searchResults]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Extract unique filter options from results
   const filterOptions = useMemo(() => {
@@ -297,10 +317,16 @@ const SearchResultsSidebar: React.FC<SearchResultsSidebarProps> = ({
             <span className="count">({processedResults.activities.length})</span>
           )}
         </button>
+        <button
+          onClick={() => setActiveTab('trip')}
+          className={`tab ${activeTab === 'trip' ? 'active' : ''}`}
+        >
+          Trip Plan
+        </button>
       </div>
 
       {/* Sort and filter controls */}
-      {hasResults && (
+      {hasResults && activeTab !== 'trip' && (
         <div className="controls-bar">
           <select
             value={sortBy}
@@ -331,7 +357,7 @@ const SearchResultsSidebar: React.FC<SearchResultsSidebarProps> = ({
       )}
 
       {/* Filter panel */}
-      {showFilters && hasResults && (
+      {showFilters && hasResults && activeTab !== 'trip' && (
         <div className="filter-panel">
           <div className="filter-section">
             <h4>Price Range</h4>
@@ -515,7 +541,15 @@ const SearchResultsSidebar: React.FC<SearchResultsSidebarProps> = ({
 
       {/* Content area */}
       <div className="sidebar-content">
-        {isLoading ? (
+        {activeTab === 'trip' ? (
+          sessionId ? (
+            <TripPlanPanel sessionId={sessionId} isOpen={true} />
+          ) : (
+            <div className="empty-state">
+              <p>No session available for trip planning</p>
+            </div>
+          )
+        ) : isLoading ? (
           <div className="loading-state">
             <div className="loading-spinner large" />
             <p>Searching for {activeTab}...</p>
@@ -630,7 +664,7 @@ const SearchResultsSidebar: React.FC<SearchResultsSidebarProps> = ({
       </div>
 
       {/* Actions */}
-      {selectedCount > 0 && (
+      {selectedCount > 0 && activeTab !== 'trip' && (
         <div className="sidebar-actions">
           <button 
             className="btn-primary"

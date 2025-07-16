@@ -2,6 +2,7 @@
 export * from './User';
 export * from './TravelRequestTypes';
 export * from './AIAgentTypes';
+export * from './TravelerTypes';
 
 // Re-export commonly used types
 export type { User, AuthState, LoginCredentials, RegisterData, UserPreferences } from './User';
@@ -13,7 +14,11 @@ export type {
   Airport, 
   Location,
   Price,
-  TravelSession 
+  TravelSession,
+  TravelPreferences,
+  AccommodationPreferences,
+  FlightPreferences,
+  ApiResponse
 } from './TravelRequestTypes';
 export type {
   TravelAgent,
@@ -28,3 +33,10 @@ export type {
   CardResponse,
   QuickAction
 } from './AIAgentTypes';
+export type {
+  TravelerProfile,
+  TravelerFormData,
+  TravelerPreferences,
+  TravelerDocument,
+  TravelerListResponse
+} from './TravelerTypes';

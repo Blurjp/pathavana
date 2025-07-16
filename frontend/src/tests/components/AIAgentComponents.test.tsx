@@ -101,13 +101,12 @@ describe('AI Travel Agent UI Components', () => {
     });
 
     it('should handle action button clicks', async () => {
-      const user = userEvent.setup();
       const mockOnAction = jest.fn();
       render(<CardMessage response={mockCardResponse} onAction={mockOnAction} />);
 
       // Click "Add to Plan" for flight
       const addToPlans = screen.getAllByText('Add to Plan');
-      await user.click(addToPlans[0]);
+      await userEvent.click(addToPlans[0]);
 
       expect(mockOnAction).toHaveBeenCalledWith('add_to_plan', {
         type: 'flight',
@@ -116,7 +115,7 @@ describe('AI Travel Agent UI Components', () => {
 
       // Click "Book Now" for hotel
       const bookNowButton = screen.getByText('Book Now');
-      await user.click(bookNowButton);
+      await userEvent.click(bookNowButton);
 
       expect(mockOnAction).toHaveBeenCalledWith('book_now', {
         type: 'hotel',
@@ -215,7 +214,6 @@ describe('AI Travel Agent UI Components', () => {
     });
 
     it('should handle action clicks correctly', async () => {
-      const user = userEvent.setup();
       const mockOnActionClick = jest.fn();
       render(
         <QuickActions 
@@ -225,13 +223,12 @@ describe('AI Travel Agent UI Components', () => {
       );
 
       const planTripButton = screen.getByText('Plan a trip');
-      await user.click(planTripButton);
+      await userEvent.click(planTripButton);
 
       expect(mockOnActionClick).toHaveBeenCalledWith('start_planning', undefined);
     });
 
     it('should handle keyboard navigation', async () => {
-      const user = userEvent.setup();
       const mockOnActionClick = jest.fn();
       render(
         <QuickActions 
@@ -242,7 +239,7 @@ describe('AI Travel Agent UI Components', () => {
 
       const planTripButton = screen.getByText('Plan a trip');
       planTripButton.focus();
-      await user.keyboard('{Enter}');
+      await userEvent.keyboard('{Enter}');
 
       expect(mockOnActionClick).toHaveBeenCalledWith('start_planning', undefined);
     });
@@ -331,7 +328,6 @@ describe('AI Travel Agent UI Components', () => {
     });
 
     it('should render suggestions', async () => {
-      const user = userEvent.setup();
       const mockOnAction = jest.fn();
       const messageWithSuggestions: ChatMessageType = {
         ...baseMessage,
@@ -351,7 +347,7 @@ describe('AI Travel Agent UI Components', () => {
 
       // Test suggestion click
       const suggestion = screen.getByText('Search flights');
-      await user.click(suggestion);
+      await userEvent.click(suggestion);
 
       expect(mockOnAction).toHaveBeenCalledWith('suggestion', 'Search flights');
     });
@@ -455,7 +451,6 @@ describe('AI Travel Agent UI Components', () => {
 
   describe('Component Integration', () => {
     it('should handle complex conversation with multiple components', async () => {
-      const user = userEvent.setup();
       const mockOnAction = jest.fn();
 
       // Create a conversation with multiple message types
@@ -530,17 +525,17 @@ describe('AI Travel Agent UI Components', () => {
 
       // Test card action
       const addToPlanButton = screen.getByText('Add to Plan');
-      await user.click(addToPlanButton);
+      await userEvent.click(addToPlanButton);
       expect(mockOnAction).toHaveBeenCalledWith('add_to_plan', { id: 'flight-1' });
 
       // Test suggestion
       const suggestion = screen.getByText('Add flight to plan');
-      await user.click(suggestion);
+      await userEvent.click(suggestion);
       expect(mockOnAction).toHaveBeenCalledWith('suggestion', 'Add flight to plan');
 
       // Test quick action
       const sortByPrice = screen.getByText('Sort by price');
-      await user.click(sortByPrice);
+      await userEvent.click(sortByPrice);
       expect(mockOnAction).toHaveBeenCalledWith('sort_price', undefined);
     });
 

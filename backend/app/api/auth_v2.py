@@ -166,12 +166,12 @@ async def google_login(
     try:
         logger.info(f"Google login request received: id_token={bool(google_data.id_token)}, user_info={bool(google_data.user_info)}")
         
+        # Import Google auth libraries
+        from google.oauth2 import id_token as google_id_token
+        from google.auth.transport import requests as google_auth_requests
+        
         # Handle ID token verification
         if google_data.id_token:
-            # Import Google auth libraries
-            from google.oauth2 import id_token as google_id_token
-            from google.auth.transport import requests as google_auth_requests
-            
             if not settings.GOOGLE_CLIENT_ID:
                 raise HTTPException(
                     status_code=status.HTTP_501_NOT_IMPLEMENTED,

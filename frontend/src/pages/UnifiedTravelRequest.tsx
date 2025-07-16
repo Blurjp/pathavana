@@ -6,6 +6,7 @@ import { AuthGuard } from '../components/auth/AuthGuard';
 import ChatInput from '../components/ChatInput';
 import SearchResultsSidebar from '../components/SearchResultsSidebar';
 import InteractiveMap from '../components/InteractiveMap';
+import SearchProgress from '../components/search/SearchProgress';
 import { ChatMessage, SearchResults, Location, ItineraryItem } from '../types';
 import { formatDateTime, getRelativeTimeString } from '../utils/dateHelpers';
 import '../styles/pages/UnifiedTravelRequest.css';
@@ -28,10 +29,12 @@ const UnifiedTravelRequest: React.FC = () => {
     resendMessage,
     deleteMessage,
     editMessage,
-    syncWithServer
+    syncWithServer,
+    searchResults,
+    isSearching
   } = useUnifiedSession(urlSessionId);
 
-  const { sidebarOpen } = useSidebar();
+  const { sidebarOpen, toggleSidebar } = useSidebar();
   const [currentSearchResults, setCurrentSearchResults] = useState<SearchResults | undefined>();
   const [mapLocations, setMapLocations] = useState<Location[]>([]);
   const [showMap, setShowMap] = useState(false);
@@ -39,8 +42,15 @@ const UnifiedTravelRequest: React.FC = () => {
   const [editingContent, setEditingContent] = useState('');
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [conflicts, setConflicts] = useState<string[]>([]);
+  const [searchType, setSearchType] = useState<'flight' | 'hotel' | 'activity' | null>(null);
+  const [searchMessageId, setSearchMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Debug log for messages
+  useEffect(() => {
+    console.log('Messages in UnifiedTravelRequest:', messages.length, messages);
+  }, [messages]);
 
   // Update URL when sessionId changes
   useEffect(() => {
@@ -62,6 +72,10 @@ const UnifiedTravelRequest: React.FC = () => {
     
     if (latestAssistantMessage?.metadata?.searchResults) {
       setCurrentSearchResults(latestAssistantMessage.metadata.searchResults);
+      
+      // Clear search status when results arrive
+      setSearchType(null);
+      setSearchMessageId(null);
       
       // Extract locations for map
       const locations: Location[] = [];
@@ -86,6 +100,16 @@ const UnifiedTravelRequest: React.FC = () => {
       setMapLocations(locations);
     }
   }, [messages]);
+  
+  // Track the latest user message that might trigger a search
+  useEffect(() => {
+    if (searchType && messages.length > 0) {
+      const latestUserMessage = [...messages].reverse().find(msg => msg.type === 'user');
+      if (latestUserMessage) {
+        setSearchMessageId(latestUserMessage.id);
+      }
+    }
+  }, [messages, searchType]);
 
   // Generate contextual suggestions based on conversation state
   const getContextualSuggestions = useCallback(() => {
@@ -140,6 +164,14 @@ const UnifiedTravelRequest: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const detectSearchType = (message: string): 'flight' | 'hotel' | 'activity' | null => {
+    const lowerMessage = message.toLowerCase();
+    if (/\b(flight|fly|flying|airfare|plane)\b/.test(lowerMessage)) return 'flight';
+    if (/\b(hotel|accommodation|stay|lodging|room)\b/.test(lowerMessage)) return 'hotel';
+    if (/\b(activity|activities|things to do|attractions|tours)\b/.test(lowerMessage)) return 'activity';
+    return null;
+  };
+
   const handleSendMessage = async (content: string) => {
     try {
       // Check for conflicts before sending
@@ -150,6 +182,15 @@ const UnifiedTravelRequest: React.FC = () => {
         // Store the message to send after conflict resolution
         sessionStorage.setItem('pendingMessage', content);
         return;
+      }
+      
+      // Detect search type from message
+      const detectedType = detectSearchType(content);
+      if (detectedType) {
+        setSearchType(detectedType);
+        // Set the message ID for the next user message
+        const nextMessageId = `user-${Date.now()}`;
+        setSearchMessageId(nextMessageId);
       }
       
       await sendMessage(content);
@@ -170,15 +211,9 @@ const UnifiedTravelRequest: React.FC = () => {
     }
   };
 
-  const handleNewChat = async () => {
-    try {
-      await createNewSession();
-      setCurrentSearchResults(undefined);
-      setMapLocations([]);
-      setShowMap(false);
-    } catch (error) {
-      console.error('Failed to create new session:', error);
-    }
+  const handleNewChat = () => {
+    // Navigate to /chat which will create a new session and redirect
+    navigate('/chat');
   };
 
   const handleEditMessage = (messageId: string, currentContent: string) => {
@@ -260,6 +295,47 @@ const UnifiedTravelRequest: React.FC = () => {
                     ))
                   )}
                 </div>
+                
+                {/* Show search progress for user messages that triggered a search */}
+                {message.type === 'user' && searchType && searchMessageId === message.id && isSearching && (
+                  <SearchProgress
+                    type={searchType}
+                    status="searching"
+                  />
+                )}
+                
+                {/* Show search progress with results count for assistant messages */}
+                {message.type === 'assistant' && message.metadata?.searchResults && (
+                  <>
+                    {message.metadata.searchResults.flights && (
+                      <div onClick={() => !sidebarOpen && toggleSidebar()} style={{ cursor: 'pointer' }}>
+                        <SearchProgress
+                          type="flight"
+                          status="found"
+                          count={message.metadata.searchResults.flights.length}
+                        />
+                      </div>
+                    )}
+                    {message.metadata.searchResults.hotels && (
+                      <div onClick={() => !sidebarOpen && toggleSidebar()} style={{ cursor: 'pointer' }}>
+                        <SearchProgress
+                          type="hotel"
+                          status="found"
+                          count={message.metadata.searchResults.hotels.length}
+                        />
+                      </div>
+                    )}
+                    {message.metadata.searchResults.activities && (
+                      <div onClick={() => !sidebarOpen && toggleSidebar()} style={{ cursor: 'pointer' }}>
+                        <SearchProgress
+                          type="activity"
+                          status="found"
+                          count={message.metadata.searchResults.activities.length}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
                 
                 {/* Show search results summary in message */}
                 {message.metadata?.searchResults && (
@@ -558,9 +634,10 @@ const UnifiedTravelRequest: React.FC = () => {
 
       {/* Search results sidebar */}
       <SearchResultsSidebar
-        searchResults={currentSearchResults}
-        isLoading={isMessageLoading || isStreaming}
+        searchResults={currentSearchResults || searchResults}
+        isLoading={isSearching || isMessageLoading || isStreaming}
         onAddToTrip={handleAddToTrip}
+        sessionId={sessionId}
       />
 
       {/* Conflict resolution modal */}

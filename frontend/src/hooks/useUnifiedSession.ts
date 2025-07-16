@@ -18,17 +18,27 @@ interface UseUnifiedSessionReturn {
   isContextLoading: boolean;
   contextError: string | null;
   sendMessage: (content: string) => Promise<void>;
-  createNewSession: () => Promise<void>;
+  createNewSession: () => Promise<string | undefined>;
   clearSession: () => Promise<void>;
   updateContext: (updates: any) => void;
   resendMessage: (messageId: string) => Promise<void>;
   deleteMessage: (messageId: string) => void;
   editMessage: (messageId: string, newContent: string) => Promise<void>;
   syncWithServer: () => Promise<void>;
+  searchResults?: any;
+  isSearching: boolean;
 }
 
-export const useUnifiedSession = (initialSessionId?: string): UseUnifiedSessionReturn => {
+export const useUnifiedSession = (
+  initialSessionId?: string,
+  forceNewSession: boolean = false
+): UseUnifiedSessionReturn => {
   const [sessionId, setSessionId] = useState<string>(() => {
+    // If forceNewSession is true, start with empty session (will be created by backend)
+    if (forceNewSession) {
+      return '';
+    }
+    // Otherwise, use provided ID, stored ID, or create new one
     return initialSessionId || localStorage.getItem('currentSessionId') || uuidv4();
   });
 
@@ -40,6 +50,11 @@ export const useUnifiedSession = (initialSessionId?: string): UseUnifiedSessionR
     loadSession,
     deleteSession,
   } = useSessionManager();
+
+  const handleSessionCreated = useCallback((newSessionId: string) => {
+    console.log('Session created via chat:', newSessionId);
+    setSessionId(newSessionId);
+  }, []);
 
   const {
     messages,
@@ -53,7 +68,9 @@ export const useUnifiedSession = (initialSessionId?: string): UseUnifiedSessionR
     deleteMessage,
     editMessage,
     syncWithServer: syncMessages,
-  } = useChatManager(sessionId);
+    searchResults,
+    isSearching,
+  } = useChatManager(sessionId, handleSessionCreated);
 
   const {
     context,
@@ -75,11 +92,21 @@ export const useUnifiedSession = (initialSessionId?: string): UseUnifiedSessionR
 
   // Update localStorage when sessionId changes
   useEffect(() => {
-    localStorage.setItem('currentSessionId', sessionId);
+    if (sessionId) {
+      console.log('SessionId changed to:', sessionId);
+      localStorage.setItem('currentSessionId', sessionId);
+    }
   }, [sessionId]);
 
   const initializeSession = async () => {
     try {
+      // If forcing new session, don't create it immediately
+      // Let the first message create the session
+      if (forceNewSession) {
+        console.log('Force new session mode - will create on first message');
+        return;
+      }
+
       // Try to load existing session first
       if (initialSessionId) {
         const loaded = await loadSession(initialSessionId);
@@ -101,21 +128,40 @@ export const useUnifiedSession = (initialSessionId?: string): UseUnifiedSessionR
     }
   };
 
-  const createNewSession = useCallback(async () => {
+  const createNewSession = useCallback(async (): Promise<string | undefined> => {
     try {
       const newSessionId = await createSession();
       if (newSessionId) {
-        setSessionId(newSessionId);
-        clearMessages();
+        // Clear context first
         await clearContext();
         
         // Clear any pending messages
         sessionStorage.removeItem('pendingMessage');
+        
+        // Small delay to ensure localStorage is written before sessionId change triggers reload
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Update the sessionId which will trigger useChatManager to reload
+        setSessionId(newSessionId);
+        
+        // Return the new session ID
+        return newSessionId;
       }
+      
+      if (newSessionId) {
+        try {
+          await loadSession(newSessionId);
+        } catch (loadErr) {
+          console.warn('Failed to load session from server, using local data:', loadErr);
+        }
+      }
+      
+      return undefined;
     } catch (err) {
       console.error('Failed to create new session:', err);
+      return undefined;
     }
-  }, [createSession, clearMessages, clearContext]);
+  }, [createSession, clearContext, loadSession]);
 
   const clearSession = useCallback(async () => {
     try {
@@ -176,5 +222,7 @@ export const useUnifiedSession = (initialSessionId?: string): UseUnifiedSessionR
     deleteMessage,
     editMessage,
     syncWithServer,
+    searchResults,
+    isSearching,
   };
 };

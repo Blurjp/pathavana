@@ -1,0 +1,228 @@
+/* Traveler Card Styles */
+.traveler-card {
+  background: white;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.2s;
+  animation: cardSlideIn 0.3s ease-out;
+}
+
+.traveler-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+              0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transform: translateY(-2px);
+}
+
+/* Card Header */
+.traveler-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.traveler-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-color, #3b82f6), #60a5fa);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 1.125rem;
+  flex-shrink: 0;
+}
+
+.traveler-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.traveler-name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary, #1f2937);
+  margin: 0 0 0.25rem 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.traveler-email {
+  font-size: 0.875rem;
+  color: var(--text-secondary, #6b7280);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Action Buttons */
+.traveler-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-secondary, #6b7280);
+}
+
+.action-btn:hover {
+  background-color: var(--bg-secondary, #f3f4f6);
+  border-color: var(--border-color, #e5e7eb);
+}
+
+.edit-btn:hover {
+  color: var(--primary-color, #3b82f6);
+}
+
+.delete-btn:hover {
+  color: #ef4444;
+}
+
+/* Details Section */
+.traveler-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.detail-label {
+  color: var(--text-secondary, #6b7280);
+  font-weight: 500;
+  min-width: 80px;
+}
+
+.detail-value {
+  color: var(--text-primary, #1f2937);
+  flex: 1;
+}
+
+.detail-section {
+  margin-top: 0.5rem;
+}
+
+.detail-section .detail-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  min-width: unset;
+}
+
+/* Tags */
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  background-color: var(--bg-secondary, #f3f4f6);
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-primary, #1f2937);
+}
+
+.dietary-tag {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.accessibility-tag {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.activity-tag {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+/* Preferences Summary */
+.preferences-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+}
+
+.pref-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary, #6b7280);
+}
+
+.rating {
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+/* Animations */
+@keyframes cardSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .traveler-card {
+    padding: 1.25rem;
+  }
+
+  .traveler-card-header {
+    margin-bottom: 1rem;
+  }
+
+  .traveler-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 1rem;
+  }
+
+  .traveler-name {
+    font-size: 1rem;
+  }
+
+  .detail-label {
+    min-width: 70px;
+  }
+
+  .preferences-summary {
+    gap: 0.75rem;
+  }
+}

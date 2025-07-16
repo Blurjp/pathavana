@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug New Chat</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .section { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Debug New Chat Functionality</h1>
+    
+    <div class="section">
+        <h2>Test Controls</h2>
+        <button onclick="testCreateSession()">1. Create Session (Backend)</button>
+        <button onclick="checkLocalStorage()">2. Check LocalStorage</button>
+        <button onclick="simulateFrontend()">3. Simulate Frontend Flow</button>
+        <button onclick="clearAll()">Clear All</button>
+    </div>
+    
+    <div id="results" class="section">
+        <h2>Results</h2>
+        <pre id="output">Click a button to start testing...</pre>
+    </div>
+    
+    <script>
+        const output = document.getElementById('output');
+        
+        async function testCreateSession() {
+            output.textContent = 'Creating session via backend API...\n';
+            
+            try {
+                const response = await fetch('http://localhost:8001/api/v1/travel/sessions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: 'Hello, I want to plan a trip',
+                        source: 'web'
+                    })
+                });
+                
+                const data = await response.json();
+                output.textContent += 'Response:\n' + JSON.stringify(data, null, 2);
+                
+                if (data.success) {
+                    window.testSessionId = data.data.session_id;
+                    output.textContent += '\n\nSession ID saved: ' + window.testSessionId;
+                }
+            } catch (error) {
+                output.textContent += '\nError: ' + error.message;
+            }
+        }
+        
+        function checkLocalStorage() {
+            output.textContent = 'Checking LocalStorage...\n\n';
+            
+            const keys = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.includes('pathavana') || key.includes('session')) {
+                    keys.push(key);
+                }
+            }
+            
+            if (keys.length === 0) {
+                output.textContent += 'No Pathavana-related keys found in localStorage';
+            } else {
+                keys.forEach(key => {
+                    const value = localStorage.getItem(key);
+                    output.textContent += `Key: ${key}\n`;
+                    try {
+                        const parsed = JSON.parse(value);
+                        output.textContent += `Value: ${JSON.stringify(parsed, null, 2)}\n\n`;
+                    } catch {
+                        output.textContent += `Value: ${value}\n\n`;
+                    }
+                });
+            }
+        }
+        
+        async function simulateFrontend() {
+            output.textContent = 'Simulating frontend new chat flow...\n\n';
+            
+            if (!window.testSessionId) {
+                output.textContent += 'Please create a session first!';
+                return;
+            }
+            
+            const sessionId = window.testSessionId;
+            
+            // Simulate what the frontend does
+            output.textContent += '1. Creating initial messages...\n';
+            const initialMessages = [
+                {
+                    id: `msg-${Date.now()}-1`,
+                    content: 'Hello, I want to plan a trip',
+                    type: 'user',
+                    timestamp: new Date().toISOString(),
+                },
+                {
+                    id: `msg-${Date.now()}-2`,
+                    content: "I'd be happy to help you plan your trip! I can assist you with finding flights, hotels, and activities. Could you tell me more about where you'd like to go and when?",
+                    type: 'assistant',
+                    timestamp: new Date().toISOString(),
+                }
+            ];
+            
+            output.textContent += 'Messages:\n' + JSON.stringify(initialMessages, null, 2) + '\n\n';
+            
+            // Save to localStorage
+            output.textContent += '2. Saving to localStorage...\n';
+            const messageKey = `pathavana_messages_${sessionId}`;
+            localStorage.setItem(messageKey, JSON.stringify(initialMessages));
+            localStorage.setItem('currentSessionId', sessionId);
+            
+            output.textContent += `Saved to key: ${messageKey}\n`;
+            output.textContent += `Current session ID: ${sessionId}\n\n`;
+            
+            // Try to load back
+            output.textContent += '3. Loading from localStorage...\n';
+            const loaded = localStorage.getItem(messageKey);
+            const messages = JSON.parse(loaded);
+            output.textContent += `Loaded ${messages.length} messages\n`;
+            output.textContent += 'Messages loaded successfully!\n\n';
+            
+            output.textContent += '✅ Frontend simulation complete!';
+        }
+        
+        function clearAll() {
+            const keys = [];
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+                const key = localStorage.key(i);
+                if (key && (key.includes('pathavana') || key.includes('session'))) {
+                    keys.push(key);
+                    localStorage.removeItem(key);
+                }
+            }
+            
+            output.textContent = `Cleared ${keys.length} keys:\n${keys.join('\n')}`;
+            window.testSessionId = null;
+        }
+    </script>
+</body>
+</html>

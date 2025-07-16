@@ -39,62 +39,95 @@ class UnifiedOrchestrator:
     """
     
     def __init__(self, travel_service: UnifiedTravelService):
+        logger.debug("🤖 Initializing UnifiedOrchestrator...")
         self.travel_service = travel_service
         self.llm_service = LLMService()
         self.context_service = TripContextService()
         self.amadeus_service = AmadeusService()
         self.cache_service = CacheService()
         
+        logger.debug("Initializing AI tool services...")
         # Initialize tool services
         self.flight_tools = FlightTools(self.amadeus_service, self.cache_service)
         self.hotel_tools = HotelTools(self.amadeus_service, self.cache_service)
         self.activity_tools = ActivityTools(self.cache_service)
         
+        logger.debug("Initializing LangChain components...")
         # Initialize LangChain components
         self._initialize_langchain()
         
         # Session memory storage
         self.session_memories = {}
+        logger.info("✅ UnifiedOrchestrator initialization complete")
     
     def _initialize_langchain(self):
         """Initialize LangChain LLM and tools."""
         # Initialize LLM based on provider
         callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
         
-        if settings.LLM_PROVIDER == "azure_openai":
-            self.llm = AzureChatOpenAI(
-                azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
-                openai_api_key=settings.AZURE_OPENAI_API_KEY,
-                openai_api_version=settings.AZURE_OPENAI_API_VERSION,
-                deployment_name=settings.AZURE_OPENAI_DEPLOYMENT_NAME,
-                temperature=settings.LLM_TEMPERATURE,
-                max_tokens=settings.LLM_MAX_TOKENS,
-                streaming=settings.LLM_STREAMING_ENABLED,
-                callback_manager=callback_manager if settings.LLM_STREAMING_ENABLED else None
-            )
-        elif settings.LLM_PROVIDER == "openai":
-            self.llm = ChatOpenAI(
-                openai_api_key=settings.OPENAI_API_KEY,
-                model_name=settings.LLM_MODEL,
-                temperature=settings.LLM_TEMPERATURE,
-                max_tokens=settings.LLM_MAX_TOKENS,
-                streaming=settings.LLM_STREAMING_ENABLED,
-                callback_manager=callback_manager if settings.LLM_STREAMING_ENABLED else None
-            )
-        elif settings.LLM_PROVIDER == "anthropic":
-            self.llm = ChatAnthropic(
-                anthropic_api_key=settings.ANTHROPIC_API_KEY,
-                model=settings.LLM_MODEL,
-                temperature=settings.LLM_TEMPERATURE,
-                max_tokens=settings.LLM_MAX_TOKENS
-            )
-        else:
-            raise ValueError(f"Unsupported LLM provider: {settings.LLM_PROVIDER}")
+        logger.debug(f"🔧 LLM Provider configured: {settings.LLM_PROVIDER}")
+        logger.debug(f"🔧 LLM Model: {settings.LLM_MODEL}")
+        logger.debug(f"🔧 LLM Temperature: {settings.LLM_TEMPERATURE}")
+        
+        try:
+            if settings.LLM_PROVIDER == "azure_openai":
+                logger.debug("Checking Azure OpenAI credentials...")
+                if not all([settings.AZURE_OPENAI_ENDPOINT, settings.AZURE_OPENAI_API_KEY, settings.AZURE_OPENAI_DEPLOYMENT_NAME]):
+                    raise ValueError("Azure OpenAI credentials not configured. Please set AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, and AZURE_OPENAI_DEPLOYMENT_NAME environment variables.")
+                
+                logger.debug(f"Azure endpoint: {settings.AZURE_OPENAI_ENDPOINT}")
+                logger.debug(f"Azure deployment: {settings.AZURE_OPENAI_DEPLOYMENT_NAME}")
+                self.llm = AzureChatOpenAI(
+                    azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+                    openai_api_key=settings.AZURE_OPENAI_API_KEY,
+                    openai_api_version=settings.AZURE_OPENAI_API_VERSION,
+                    deployment_name=settings.AZURE_OPENAI_DEPLOYMENT_NAME,
+                    temperature=settings.LLM_TEMPERATURE,
+                    max_tokens=settings.LLM_MAX_TOKENS,
+                    streaming=settings.LLM_STREAMING_ENABLED,
+                    callback_manager=callback_manager if settings.LLM_STREAMING_ENABLED else None
+                )
+            elif settings.LLM_PROVIDER == "openai":
+                logger.debug("Checking OpenAI credentials...")
+                if not settings.OPENAI_API_KEY:
+                    raise ValueError("OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.")
+                
+                logger.debug(f"OpenAI model: {settings.LLM_MODEL}")
+                self.llm = ChatOpenAI(
+                    openai_api_key=settings.OPENAI_API_KEY,
+                    model_name=settings.LLM_MODEL,
+                    temperature=settings.LLM_TEMPERATURE,
+                    max_tokens=settings.LLM_MAX_TOKENS,
+                    streaming=settings.LLM_STREAMING_ENABLED,
+                    callback_manager=callback_manager if settings.LLM_STREAMING_ENABLED else None
+                )
+            elif settings.LLM_PROVIDER == "anthropic":
+                logger.debug("Checking Anthropic credentials...")
+                if not settings.ANTHROPIC_API_KEY:
+                    raise ValueError("Anthropic API key not configured. Please set ANTHROPIC_API_KEY environment variable.")
+                
+                logger.debug(f"Anthropic model: {settings.LLM_MODEL}")
+                self.llm = ChatAnthropic(
+                    anthropic_api_key=settings.ANTHROPIC_API_KEY,
+                    model=settings.LLM_MODEL,
+                    temperature=settings.LLM_TEMPERATURE,
+                    max_tokens=settings.LLM_MAX_TOKENS
+                )
+            else:
+                raise ValueError(f"Unsupported LLM provider: {settings.LLM_PROVIDER}")
+            
+            logger.info(f"✅ LLM initialized successfully with {settings.LLM_PROVIDER}")
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize LLM: {e}")
+            raise
         
         # Create LangChain tools
+        logger.debug("Creating LangChain tools...")
         self.tools = self._create_tools()
+        logger.debug(f"Created {len(self.tools)} tools")
         
         # Create agent prompt
+        logger.debug("Creating agent prompt...")
         self.prompt = self._create_agent_prompt()
     
     def _create_tools(self) -> List[Tool]:
@@ -208,7 +241,8 @@ Remember to:
             self.session_memories[session_id] = ConversationBufferWindowMemory(
                 memory_key="chat_history",
                 k=10,  # Keep last 10 exchanges
-                return_messages=True
+                return_messages=True,
+                input_key="input"  # Specify which key to use for memory
             )
         return self.session_memories[session_id]
     
@@ -231,17 +265,29 @@ Remember to:
         Returns:
             Response dictionary with message, actions, and context updates
         """
+        logger.debug("\n" + "="*60)
+        logger.debug("🤖 UnifiedOrchestrator.process_message called")
+        logger.debug(f"   Message: '{message}'")
+        logger.debug(f"   Session ID: {session_id}")
+        logger.debug(f"   User ID: {user_id}")
+        logger.debug(f"   Stream: {stream}")
+        logger.debug("="*60)
+        
         try:
             # Create session if not provided
             if not session_id:
+                logger.debug("   No session ID provided, creating new session...")
                 session_id = await self.travel_service.create_session(
                     user_id=user_id,
                     initial_context={}
                 )
+                logger.debug(f"   Created session: {session_id}")
             
             # Get current session state
+            logger.debug("   Getting current session state...")
             session_state = await self.travel_service.get_session_state(session_id)
             current_context = session_state.get("travel_context", {})
+            logger.debug(f"   Current context: {current_context}")
             
             # Add user message to conversation history
             await self.travel_service.add_conversation_message(
@@ -251,16 +297,19 @@ Remember to:
             )
             
             # Extract travel entities from the message
-            extracted_entities = self.context_service.extract_travel_entities(
+            logger.debug("   Extracting travel entities...")
+            extracted_entities = await self.context_service.extract_travel_entities(
                 message, 
                 current_context
             )
+            logger.debug(f"   Extracted entities: {extracted_entities}")
             
             # Merge with existing context
             updated_context = self.context_service.merge_context(
                 current_context, 
                 extracted_entities
             )
+            logger.debug(f"   Updated context: {updated_context}")
             
             # Update session context
             await self.travel_service.update_session_context(
@@ -302,6 +351,7 @@ Remember to:
             
             # Extract AI response
             ai_response = response.get("output", "I apologize, but I couldn't generate a response.")
+            logger.debug(f"   AI response: '{ai_response[:100]}...'")
             
             # Add AI response to conversation history
             await self.travel_service.add_conversation_message(
@@ -310,7 +360,8 @@ Remember to:
                 content=ai_response,
                 metadata={
                     "tools_used": response.get("tools_used", []),
-                    "context": updated_context
+                    "context": updated_context,
+                    "searchResults": updated_context.get("searchResults", None)
                 }
             )
             
@@ -329,18 +380,33 @@ Remember to:
                 max_suggestions=3
             )
             
-            return {
+            # Include search results if available
+            search_results = updated_context.get("searchResults", None)
+            
+            result = {
                 "response": ai_response,
                 "context": updated_context,
                 "clarifying_questions": clarifying_questions,
                 "suggestions": ai_suggestions,
                 "context_validation": validation,
                 "session_id": session_id,
-                "tools_used": response.get("tools_used", [])
+                "tools_used": response.get("tools_used", []),
+                "searchResults": search_results  # Include search results for UI
             }
             
+            logger.debug("\n" + "-"*60)
+            logger.debug("✅ UnifiedOrchestrator.process_message completed")
+            logger.debug(f"   Response length: {len(ai_response)} chars")
+            logger.debug(f"   Tools used: {len(response.get('tools_used', []))}")
+            logger.debug(f"   Suggestions: {len(ai_suggestions)}")
+            logger.debug("-"*60 + "\n")
+            
+            return result
+            
         except Exception as e:
-            logger.error(f"Error processing message: {e}", exc_info=True)
+            logger.error(f"❌ Error processing message: {e}", exc_info=True)
+            logger.debug(f"   Error type: {type(e).__name__}")
+            logger.debug(f"   Error details: {str(e)}")
             return {
                 "response": "I apologize, but I encountered an error processing your request. Please try again.",
                 "error": str(e),
@@ -426,7 +492,7 @@ Remember to:
             current_context = session_state.get("travel_context", {})
             
             # Extract travel entities from the message
-            extracted_entities = self.context_service.extract_travel_entities(
+            extracted_entities = await self.context_service.extract_travel_entities(
                 message, 
                 current_context
             )
@@ -595,6 +661,16 @@ Remember to:
             if not flights:
                 return "No flights found for the specified criteria."
             
+            # Store search results in session for UI display
+            if hasattr(self, '_current_session_id') and self._current_session_id:
+                # Update session context with search results
+                if hasattr(self, '_current_context'):
+                    self._current_context['searchResults'] = {"flights": flights}
+                    await self.travel_service.update_session_context(
+                        self._current_session_id,
+                        self._current_context
+                    )
+            
             # Format results for LLM
             response = f"Found {len(flights)} flight options:\n\n"
             for i, flight in enumerate(flights[:5], 1):  # Show top 5
@@ -603,6 +679,8 @@ Remember to:
                 response += f"${price.get('total', 'N/A')} {price.get('currency', 'USD')}\n"
                 response += f"   Duration: {flight.get('total_duration', 'N/A')}, "
                 response += f"Type: {flight.get('flight_type', 'Unknown')}\n"
+            
+            response += "\n✈️ *I've found some great flight options for you! Check the sidebar for full details and filtering options.*"
             
             return response
             
@@ -637,6 +715,16 @@ Remember to:
             if not hotels:
                 return "No hotels found for the specified criteria."
             
+            # Store search results in session for UI display
+            if hasattr(self, '_current_session_id') and self._current_session_id:
+                # Update session context with search results
+                if hasattr(self, '_current_context'):
+                    self._current_context['searchResults'] = {"hotels": hotels}
+                    await self.travel_service.update_session_context(
+                        self._current_session_id,
+                        self._current_context
+                    )
+            
             # Format results for LLM
             response = f"Found {len(hotels)} hotel options in {city}:\n\n"
             for i, hotel in enumerate(hotels[:5], 1):  # Show top 5
@@ -644,6 +732,8 @@ Remember to:
                 response += f"{hotel.get('rating', 'N/A')} stars\n"
                 response += f"   Price: ${hotel.get('price', {}).get('total', 'N/A')} per night\n"
                 response += f"   Location: {hotel.get('address', 'Address not available')}\n"
+            
+            response += "\n🏨 *I've found some excellent hotel options! Check the sidebar for full details, photos, and filtering options.*"
             
             return response
             
@@ -667,12 +757,24 @@ Remember to:
             if not activities:
                 return f"No activities found for {destination}."
             
+            # Store search results in session for UI display
+            if hasattr(self, '_current_session_id') and self._current_session_id:
+                # Update session context with search results
+                if hasattr(self, '_current_context'):
+                    self._current_context['searchResults'] = {"activities": activities}
+                    await self.travel_service.update_session_context(
+                        self._current_session_id,
+                        self._current_context
+                    )
+            
             # Format results for LLM
             response = f"Found activities and attractions in {destination}:\n\n"
             for i, activity in enumerate(activities[:5], 1):  # Show top 5
                 response += f"{i}. {activity.get('name', 'Unknown Activity')}\n"
                 response += f"   Type: {activity.get('type', 'N/A')}\n"
                 response += f"   Description: {activity.get('description', 'No description available')}\n"
+            
+            response += "\n🎯 *I've found some exciting activities and attractions! Check the sidebar for full details and booking options.*"
             
             return response
             

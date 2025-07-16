@@ -9,8 +9,11 @@ import TravelRequest from './pages/TravelRequest';
 import UnifiedTravelRequest from './pages/UnifiedTravelRequest';
 import Trips from './pages/Trips';
 import Profile from './pages/Profile';
+import ProfileSettings from './pages/ProfileSettings';
 import Travelers from './pages/Travelers';
+import DebugSession from './pages/DebugSession';
 import { configService } from './services/configService';
+import './utils/sessionDebugger'; // Initialize session debugger
 import './styles/App.css';
 import './styles/landing.css';
 
@@ -41,7 +44,9 @@ const App: React.FC = () => {
                   <Route path="/chat/:sessionId" element={<UnifiedTravelRequest />} />
                   <Route path="/trips" element={<Trips />} />
                   <Route path="/profile" element={<Profile />} />
+                  <Route path="/profile/settings" element={<ProfileSettings />} />
                   <Route path="/travelers" element={<Travelers />} />
+                  <Route path="/debug-session" element={<DebugSession />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </main>

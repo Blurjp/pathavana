@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { User, UserPreferences } from '../types';
 import { handleApiError } from '../utils/errorHandler';
+import '../styles/pages/Profile.css';
 
 const Profile: React.FC = () => {
   const { user, updateUser, isLoading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -165,14 +168,22 @@ const Profile: React.FC = () => {
     <div className="profile-page">
       <div className="page-header">
         <h1>Profile Settings</h1>
-        {!isEditing && (
+        <div className="header-actions">
           <button
-            onClick={() => setIsEditing(true)}
-            className="btn-primary"
+            onClick={() => navigate('/profile/settings')}
+            className="btn-secondary"
           >
-            Edit Profile
+            Advanced Settings
           </button>
-        )}
+          {!isEditing && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="btn-primary"
+            >
+              Edit Profile
+            </button>
+          )}
+        </div>
       </div>
 
       {success && (

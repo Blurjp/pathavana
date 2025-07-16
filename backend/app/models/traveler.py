@@ -11,11 +11,10 @@ from typing import Optional
 
 from sqlalchemy import Column, String, Integer, DateTime, Boolean, ForeignKey, Index, text, Table
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
-Base = declarative_base()
+from ..core.database import Base
 
 
 class TravelerType(str, Enum):
@@ -121,7 +120,8 @@ class Traveler(Base):
     # Relationships
     user = relationship("User")
     documents = relationship("TravelerDocument", back_populates="traveler", cascade="all, delete-orphan")
-    bookings = relationship("UnifiedBooking", secondary="booking_travelers", back_populates="travelers")
+    # TODO: Define booking_travelers table
+    # bookings = relationship("UnifiedBooking", secondary="booking_travelers", back_populates="travelers")
 
     __table_args__ = (
         Index('idx_traveler_user_type', 'user_id', 'traveler_type'),

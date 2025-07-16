@@ -45,15 +45,24 @@ export const useSessionManager = (): UseSessionManagerReturn => {
     setError(null);
 
     try {
-      const response = await unifiedTravelApi.createSession();
+      // Create an empty session without initial message
+      const response = await unifiedTravelApi.createEmptySession();
       
       if (response.success && response.data) {
-        const sessionId = response.data.sessionId;
+        const sessionId = response.data.session_id;
+        // Create welcome message for empty session
+        const welcomeMessage = "Hi! I'm your AI travel assistant. Tell me about your dream trip and I'll help you plan it!";
+        const initialMessages = [{
+          id: `msg-${Date.now()}-1`,
+          content: welcomeMessage,
+          type: 'assistant' as const,
+          timestamp: new Date().toISOString(),
+        }];
         
         // Create initial session object
         const newSession: TravelSession = {
           id: sessionId,
-          messages: [],
+          messages: initialMessages,
           context: {
             searchHistory: [],
             selectedOptions: {
@@ -69,6 +78,16 @@ export const useSessionManager = (): UseSessionManagerReturn => {
 
         setCurrentSession(newSession);
         storeSession({ sessionId, timestamp: new Date().toISOString() });
+        
+        // Store the session in localStorage for the chat manager to pick up
+        localStorage.setItem(`travel_session_${sessionId}`, JSON.stringify(newSession));
+        
+        // Also save the initial messages to the message history
+        if (initialMessages.length > 0) {
+          const messageHistoryKey = `pathavana_messages_${sessionId}`;
+          localStorage.setItem(messageHistoryKey, JSON.stringify(initialMessages));
+          console.log('Saved initial messages to localStorage:', initialMessages.length, 'messages for session', sessionId);
+        }
         
         return sessionId;
       } else {

@@ -373,15 +373,29 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     Request logging middleware for debugging and monitoring.
     """
     
+    def __init__(self, app):
+        super().__init__(app)
+        # Paths to skip logging for (too noisy)
+        self.skip_logging_paths = [
+            "/api/v1/frontend-config",
+            "/health",
+            "/api/health",
+            "/favicon.ico"
+        ]
+    
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Log request and response details."""
         start_time = time.time()
         
-        # Log request
-        logger.info(
-            f"Request: {request.method} {request.url.path} "
-            f"from {request.client.host if request.client else 'unknown'}"
-        )
+        # Check if we should skip logging for this path
+        skip_logging = any(request.url.path == path for path in self.skip_logging_paths)
+        
+        # Log request (if not skipped)
+        if not skip_logging:
+            logger.info(
+                f"Request: {request.method} {request.url.path} "
+                f"from {request.client.host if request.client else 'unknown'}"
+            )
         
         # Process request
         response = await call_next(request)
@@ -389,11 +403,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         # Calculate processing time
         process_time = time.time() - start_time
         
-        # Log response
-        logger.info(
-            f"Response: {response.status_code} for {request.method} {request.url.path} "
-            f"({process_time:.3f}s)"
-        )
+        # Log response (if not skipped)
+        if not skip_logging:
+            logger.info(
+                f"Response: {response.status_code} for {request.method} {request.url.path} "
+                f"({process_time:.3f}s)"
+            )
         
         # Add processing time header
         response.headers["X-Process-Time"] = str(process_time)

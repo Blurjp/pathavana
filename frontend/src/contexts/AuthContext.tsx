@@ -67,15 +67,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setAuthState(prev => ({ ...prev, isLoading: true }));
       
-      // Convert to OAuth2 format expected by backend
-      const formData = new URLSearchParams();
-      formData.append('username', credentials.email);
-      formData.append('password', credentials.password);
-      
-      const response = await apiClient.post<{ access_token: string; refresh_token: string; user: User }>('/api/v1/auth/login', formData.toString(), {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
+      // Send as JSON with email and password
+      const response = await apiClient.post<{ access_token: string; refresh_token: string; user: User }>('/api/v1/auth/login', {
+        email: credentials.email,
+        password: credentials.password
       });
       
       if (response.success && response.data) {

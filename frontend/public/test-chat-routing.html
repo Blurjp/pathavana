@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Chat Routing</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .test-link { display: inline-block; margin: 5px; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }
+        .test-link:hover { background: #0056b3; }
+        .info { background: #f0f8ff; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Chat Routing Test</h1>
+    
+    <div class="section">
+        <h2>How Chat Routing Works</h2>
+        <div class="info">
+            <p><strong>URL Structure:</strong></p>
+            <ul>
+                <li><code>/chat</code> - Creates a new chat session and redirects to /chat/{sessionId}</li>
+                <li><code>/chat/{sessionId}</code> - Loads an existing chat session</li>
+            </ul>
+            <p><strong>Session ID = Trip Plan ID:</strong> The same ID is used for both the chat session and any trip plans created from that chat.</p>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Test Links</h2>
+        <p>Click these links to test the routing:</p>
+        
+        <div>
+            <a href="/chat" class="test-link">New Chat (/chat)</a>
+            <span>→ Should create new session and redirect to /chat/{sessionId}</span>
+        </div>
+        
+        <div style="margin-top: 10px;">
+            <a href="/trips" class="test-link">My Trips (/trips)</a>
+            <span>→ Shows all saved trips and planning sessions</span>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Create Test Session</h2>
+        <button onclick="createTestSession()">Create Session via API</button>
+        <div id="session-result" style="margin-top: 10px;"></div>
+    </div>
+
+    <div class="section">
+        <h2>Load Sessions</h2>
+        <button onclick="loadSessions()">Load All Sessions</button>
+        <div id="sessions-list" style="margin-top: 10px;"></div>
+    </div>
+
+    <script>
+        async function createTestSession() {
+            const resultDiv = document.getElementById('session-result');
+            resultDiv.innerHTML = 'Creating session...';
+            
+            try {
+                const response = await fetch('http://localhost:8001/api/v1/travel/sessions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: 'Test chat session',
+                        source: 'web'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const sessionId = data.data.session_id;
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <p>✅ Session created successfully!</p>
+                            <p>Session ID: <code>${sessionId}</code></p>
+                            <a href="/chat/${sessionId}" class="test-link">Open Chat Session</a>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Failed to create session: ${data.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        async function loadSessions() {
+            const listDiv = document.getElementById('sessions-list');
+            listDiv.innerHTML = 'Loading sessions...';
+            
+            try {
+                const response = await fetch('http://localhost:8001/api/v1/travel/sessions');
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    if (data.data.length === 0) {
+                        listDiv.innerHTML = '<p>No sessions found</p>';
+                    } else {
+                        let html = '<h3>Available Sessions:</h3><ul>';
+                        data.data.forEach(session => {
+                            html += `
+                                <li>
+                                    <strong>Session ID:</strong> ${session.session_id || session.id}<br>
+                                    <strong>Status:</strong> ${session.status}<br>
+                                    <strong>Created:</strong> ${new Date(session.created_at).toLocaleString()}<br>
+                                    <a href="/chat/${session.session_id || session.id}" class="test-link">Open Chat</a>
+                                </li>
+                            `;
+                        });
+                        html += '</ul>';
+                        listDiv.innerHTML = html;
+                    }
+                } else {
+                    listDiv.innerHTML = `<div class="error">Failed to load sessions: ${data.error || 'Unknown error'}</div>`;
+                }
+            } catch (error) {
+                listDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

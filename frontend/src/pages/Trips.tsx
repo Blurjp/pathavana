@@ -16,7 +16,7 @@ const Trips: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [activeTab]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -45,9 +45,12 @@ const Trips: React.FC = () => {
   };
 
   const loadSessions = async () => {
-    // Note: This would need to be implemented in the API
-    // For now, we'll show a placeholder
-    setSessions([]);
+    const response = await unifiedTravelApi.getUserSessions();
+    if (response.success && response.data) {
+      setSessions(response.data);
+    } else {
+      throw new Error(response.error || 'Failed to load sessions');
+    }
   };
 
   const handleDeleteTrip = async (tripId: string) => {

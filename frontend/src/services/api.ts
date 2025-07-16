@@ -8,7 +8,7 @@ class ApiClient {
   constructor() {
     this.client = axios.create({
       baseURL: 'http://localhost:8001', // Default, will be updated dynamically
-      timeout: 30000,
+      timeout: 0, // No timeout - let the request complete
       headers: {
         'Content-Type': 'application/json',
       },
@@ -138,6 +138,11 @@ class ApiClient {
         error: error.response?.data?.message || error.message || 'Upload failed',
       };
     }
+  }
+
+  // Get the current base URL
+  getBaseURL(): string {
+    return this.client.defaults.baseURL || 'http://localhost:8001';
   }
 }
 

@@ -292,8 +292,8 @@ describe('TravelNLUEngine', () => {
           metadata: {
             intent: { type: 'search_flight', confidence: 0.9, parameters: {} },
             entities: [
-              { type: 'destination', value: 'Tokyo', confidence: 0.9, position: [0, 0] },
-              { type: 'date', value: 'March 15', confidence: 0.9, position: [0, 0] },
+              { type: 'destination' as const, value: 'Tokyo', confidence: 0.9, position: [0, 0] as [number, number] },
+              { type: 'date' as const, value: 'March 15', confidence: 0.9, position: [0, 0] as [number, number] },
               { type: 'travelers', value: 2, confidence: 0.9, position: [0, 0] }
             ]
           }
@@ -324,7 +324,7 @@ describe('TravelNLUEngine', () => {
     it('should ask for dates when missing', () => {
       const context = {
         state: ConversationState.GATHERING_REQUIREMENTS,
-        entities: [{ type: 'destination', value: 'Tokyo', confidence: 0.9, position: [0, 0] }],
+        entities: [{ type: 'destination' as const, value: 'Tokyo', confidence: 0.9, position: [0, 0] as [number, number] }],
         missingFields: ['dates'],
         lastIntent: null,
         clarificationNeeded: true
@@ -339,8 +339,8 @@ describe('TravelNLUEngine', () => {
       const context = {
         state: ConversationState.GATHERING_REQUIREMENTS,
         entities: [
-          { type: 'destination', value: 'Tokyo', confidence: 0.9, position: [0, 0] },
-          { type: 'date', value: 'March 15', confidence: 0.9, position: [0, 0] }
+          { type: 'destination' as const, value: 'Tokyo', confidence: 0.9, position: [0, 0] as [number, number] },
+          { type: 'date' as const, value: 'March 15', confidence: 0.9, position: [0, 0] as [number, number] }
         ],
         missingFields: ['travelers'],
         lastIntent: null,
@@ -357,8 +357,8 @@ describe('TravelNLUEngine', () => {
       const context = {
         state: ConversationState.GATHERING_REQUIREMENTS,
         entities: [
-          { type: 'destination', value: 'Tokyo', confidence: 0.9, position: [0, 0] },
-          { type: 'destination', value: 'Kyoto', confidence: 0.9, position: [0, 0] }
+          { type: 'destination' as const, value: 'Tokyo', confidence: 0.9, position: [0, 0] as [number, number] },
+          { type: 'destination' as const, value: 'Kyoto', confidence: 0.9, position: [0, 0] as [number, number] }
         ],
         missingFields: [],
         lastIntent: null,

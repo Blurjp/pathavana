@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSidebar } from '../contexts/SidebarContext';
@@ -19,7 +19,21 @@ const Header: React.FC = () => {
   const handleLogout = () => {
     logout();
     setShowUserMenu(false);
+    navigate('/');
   };
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showUserMenu && !target.closest('.user-menu')) {
+        setShowUserMenu(false);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showUserMenu]);
 
   return (
     <>
@@ -84,10 +98,12 @@ const Header: React.FC = () => {
                 aria-label="User menu"
               >
                 {user?.avatar ? (
-                  <img src={user.avatar} alt={user.full_name} />
+                  <img src={user.avatar} alt={user?.full_name || 'User'} />
                 ) : (
                   <div className="avatar-placeholder">
-                    {user?.full_name?.charAt(0).toUpperCase() || 'U'}
+                    {user?.full_name?.charAt(0)?.toUpperCase() || 
+                     user?.email?.charAt(0)?.toUpperCase() || 
+                     'U'}
                   </div>
                 )}
               </button>
@@ -95,8 +111,8 @@ const Header: React.FC = () => {
               {showUserMenu && (
                 <div className="user-menu-dropdown">
                   <div className="user-info">
-                    <div className="user-name">{user?.full_name}</div>
-                    <div className="user-email">{user?.email}</div>
+                    <div className="user-name">{user?.full_name || 'User'}</div>
+                    <div className="user-email">{user?.email || 'No email'}</div>
                   </div>
                   <hr />
                   <Link

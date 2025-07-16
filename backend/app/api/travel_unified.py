@@ -14,14 +14,15 @@ All endpoints follow the standard API response pattern and use UUID-based sessio
 import uuid
 from typing import Any, Dict, List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
-from fastapi.security import HTTPBearer
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Path, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 import asyncio
 import json
 
 from ..schemas.base import BaseResponse, ResponseMetadata, ErrorDetail
+from ..core.logger import logger
 from ..schemas.travel import (
     TravelSessionCreate,
     TravelSessionResponse,
@@ -42,36 +43,78 @@ from ..schemas.travel import (
 # from ..services.unified_travel_service import UnifiedTravelService
 # from ..services.llm_service import LLMService
 
-router = APIRouter(prefix="/api/travel", tags=["travel"])
-security = HTTPBearer()
+router = APIRouter(tags=["travel"])
+security = HTTPBearer(auto_error=False)
 
 
-# Dependency stubs - these would be implemented in the actual application
-async def get_db() -> AsyncSession:
-    """Get database session."""
-    # This would return an actual database session
-    pass
+# Import actual database dependency
+from ..core.database import get_db
 
 
-async def get_current_user(token: str = Depends(security)) -> Dict[str, Any]:
+async def get_current_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: AsyncSession = Depends(get_db)
+) -> Optional[Dict[str, Any]]:
     """Get current authenticated user."""
-    # This would validate token and return user
-    return {"id": 1, "email": "user@example.com"}
+    # Import auth dependency
+    from .auth_v2 import get_current_user_safe
+    
+    user = await get_current_user_safe(request, db)
+    if user:
+        return {"id": user.id, "email": user.email, "is_anonymous": False}
+    
+    # Allow anonymous access
+    return None
 
 
-async def get_travel_service() -> Any:
+async def get_travel_service(db: AsyncSession = Depends(get_db)) -> Any:
     """Get unified travel service instance."""
-    # This would return the actual service
-    pass
+    from ..services.travel_session_db import DatabaseTravelSessionManager
+    return DatabaseTravelSessionManager(db)
 
 
 async def get_orchestrator(travel_service: Any = Depends(get_travel_service)) -> Any:
     """Get AI orchestrator instance."""
-    # This would return an actual orchestrator instance
-    # In production:
-    # from ..agents.unified_orchestrator import UnifiedOrchestrator
-    # return UnifiedOrchestrator(travel_service)
-    pass
+    logger.debug("=== ORCHESTRATOR INITIALIZATION ===")
+    try:
+        from ..agents.unified_orchestrator import UnifiedOrchestrator
+        from ..services.orchestrator_adapter import OrchestratorTravelServiceAdapter
+        from ..core.config import settings
+        
+        # Check if LLM credentials are configured
+        if settings.LLM_PROVIDER == "openai" and not settings.OPENAI_API_KEY:
+            logger.warning("❌ OpenAI API key not configured. AI agent will use template responses.")
+            logger.info("ℹ️  To enable AI responses, set OPENAI_API_KEY in your .env file")
+            return None
+        elif settings.LLM_PROVIDER == "azure_openai":
+            if not all([settings.AZURE_OPENAI_API_KEY, settings.AZURE_OPENAI_ENDPOINT, settings.AZURE_OPENAI_DEPLOYMENT_NAME]):
+                logger.warning("❌ Azure OpenAI credentials not fully configured. AI agent will use template responses.")
+                logger.info("ℹ️  To enable AI responses, set AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, and AZURE_OPENAI_DEPLOYMENT_NAME in your .env file")
+                return None
+        elif settings.LLM_PROVIDER == "anthropic" and not settings.ANTHROPIC_API_KEY:
+            logger.warning("❌ Anthropic API key not configured. AI agent will use template responses.")
+            logger.info("ℹ️  To enable AI responses, set ANTHROPIC_API_KEY in your .env file")
+            return None
+        
+        logger.debug("Creating OrchestratorTravelServiceAdapter...")
+        # Wrap the travel service with the adapter
+        adapted_service = OrchestratorTravelServiceAdapter(travel_service)
+        
+        logger.debug("Creating UnifiedOrchestrator instance...")
+        orchestrator = UnifiedOrchestrator(adapted_service)
+        logger.info("✅ UnifiedOrchestrator initialized successfully")
+        return orchestrator
+    except ValueError as e:
+        logger.error(f"❌ Configuration error: {e}")
+        logger.info("ℹ️  Please check your LLM configuration in .env file")
+        return None
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize UnifiedOrchestrator: {e}")
+        logger.debug(f"Orchestrator initialization error details: {type(e).__name__}: {str(e)}")
+        import traceback
+        logger.debug(f"Traceback: {traceback.format_exc()}")
+        return None
 
 
 def validate_session_id(session_id: str) -> str:
@@ -108,12 +151,52 @@ def create_success_response(data: Dict[str, Any], session_id: Optional[str] = No
     )
 
 
+@router.post("/sessions/new", response_model=BaseResponse, status_code=status.HTTP_201_CREATED)
+async def create_empty_travel_session(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: Optional[Dict[str, Any]] = Depends(get_current_user),
+    travel_service: Any = Depends(get_travel_service)
+) -> BaseResponse:
+    """
+    Create a new empty travel session without an initial message.
+    
+    This endpoint is used when starting a new chat to get a session ID immediately.
+    The first actual message will be sent via the chat endpoint.
+    """
+    try:
+        # Get actual user object if authenticated
+        user_obj = None
+        if user and not user.get("is_anonymous"):
+            from sqlalchemy import select
+            from ..models import User
+            result = await db.execute(select(User).where(User.id == user["id"]))
+            user_obj = result.scalar_one_or_none()
+        
+        # Create empty session
+        session = await travel_service.create_empty_session(user=user_obj)
+        
+        return create_success_response(
+            data={
+                "session_id": session.session_id,
+                "status": session.status,
+                "created_at": session.created_at.isoformat() if session.created_at else None
+            },
+            session_id=session.session_id
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to create empty session: {e}")
+        return create_error_response("INTERNAL_ERROR", "Failed to create session")
+
 @router.post("/sessions", response_model=BaseResponse, status_code=status.HTTP_201_CREATED)
 async def create_travel_session(
-    request: TravelSessionCreate,
+    request_body: TravelSessionCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    user: Dict[str, Any] = Depends(get_current_user),
-    travel_service: Any = Depends(get_travel_service)
+    user: Optional[Dict[str, Any]] = Depends(get_current_user),
+    travel_service: Any = Depends(get_travel_service),
+    orchestrator: Any = Depends(get_orchestrator)
 ) -> BaseResponse:
     """
     Create a new travel session with initial message.
@@ -141,27 +224,45 @@ async def create_travel_session(
         HTTPException: If session creation fails
     """
     try:
-        # Generate new session ID
-        session_id = str(uuid.uuid4())
+        # Get actual user object if authenticated
+        user_obj = None
+        if user and not user.get("is_anonymous"):
+            from sqlalchemy import select
+            from ..models import User
+            result = await db.execute(select(User).where(User.id == user["id"]))
+            user_obj = result.scalar_one_or_none()
         
-        # Process initial message and create session
-        session_data = await travel_service.create_session(
-            session_id=session_id,
-            user_id=user["id"],
-            initial_message=request.message,
-            source=request.source,
-            metadata=request.metadata
+        # Create session using the implementation with orchestrator
+        session = await travel_service.create_session(
+            user=user_obj,
+            request=request_body,
+            orchestrator=orchestrator
         )
         
+        # Extract initial response from conversation history
+        conversation = session.session_data.get("conversation_history", [])
+        ai_response = conversation[-1] if conversation else None
+        
+        # Include full metadata with hints
+        response_data = {
+            "session_id": session.session_id,
+            "parsed_intent": session.session_data.get("parsed_intent", {
+                "type": "travel_planning",
+                "confidence": 0.9
+            }),
+            "suggestions": ai_response.get("metadata", {}).get("suggestions", []) if ai_response else [],
+            "trip_context": session.plan_data.get("trip_context", {}) if session.plan_data else {},
+            "status": session.status,
+            "initial_response": ai_response.get("content", "") if ai_response else ""
+        }
+        
+        # Add metadata with hints if available
+        if ai_response and "metadata" in ai_response:
+            response_data["metadata"] = ai_response["metadata"]
+        
         return create_success_response(
-            data={
-                "session_id": session_id,
-                "parsed_intent": session_data.get("parsed_intent"),
-                "suggestions": session_data.get("suggestions", []),
-                "trip_context": session_data.get("trip_context"),
-                "status": SessionStatus.ACTIVE.value
-            },
-            session_id=session_id
+            data=response_data,
+            session_id=session.session_id
         )
         
     except ValueError as e:
@@ -173,11 +274,13 @@ async def create_travel_session(
 
 @router.post("/sessions/{session_id}/chat", response_model=BaseResponse)
 async def send_chat_message(
+    request_body: ChatRequest,
+    request: Request,
     session_id: str = Path(..., description="Travel session ID"),
-    request: ChatRequest = ...,
     db: AsyncSession = Depends(get_db),
-    user: Dict[str, Any] = Depends(get_current_user),
-    travel_service: Any = Depends(get_travel_service)
+    user: Optional[Dict[str, Any]] = Depends(get_current_user),
+    travel_service: Any = Depends(get_travel_service),
+    orchestrator: Any = Depends(get_orchestrator)
 ) -> BaseResponse:
     """
     Send a message to an existing travel session.
@@ -209,31 +312,86 @@ async def send_chat_message(
     """
     session_id = validate_session_id(session_id)
     
+    logger.debug("\n" + "="*60)
+    logger.debug(f"🗨️  PROCESSING CHAT MESSAGE")
+    logger.debug(f"Session ID: {session_id}")
+    logger.debug(f"User message: {request_body.message}")
+    logger.debug(f"Orchestrator available: {orchestrator is not None}")
+    logger.debug("="*60)
+    
+    # Log warning if orchestrator is not available
+    if orchestrator is None:
+        logger.warning("⚠️  AI Orchestrator not available - using template responses")
+        logger.info("💡 TIP: Configure LLM credentials in .env to enable intelligent AI responses")
+    
     try:
-        # Verify session ownership
-        session = await travel_service.get_session(session_id, user["id"])
-        if not session:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Session not found"
-            )
-        
-        # Process message with conversation context
-        response_data = await travel_service.process_message(
+        # Process chat message
+        result = await travel_service.add_chat_message(
             session_id=session_id,
-            message=request.message,
-            metadata=request.metadata
+            request=request_body,
+            user_id=user.get("id") if user and not user.get("is_anonymous") else None,
+            orchestrator=orchestrator
         )
         
+        if not result:
+            # Try to create a new session if not found
+            logger.info(f"Session {session_id} not found, creating new session")
+            
+            # Get actual user object if authenticated
+            user_obj = None
+            if user and not user.get("is_anonymous"):
+                from sqlalchemy import select
+                from ..models import User
+                result = await db.execute(select(User).where(User.id == user["id"]))
+                user_obj = result.scalar_one_or_none()
+            
+            # Create new session with the message
+            session = await travel_service.get_or_create_session(
+                session_id=session_id,
+                user=user_obj,
+                initial_message=request_body.message
+            )
+            
+            # Try adding the message again
+            result = await travel_service.add_chat_message(
+                session_id=session_id,
+                request=request_body,
+                user_id=user.get("id") if user and not user.get("is_anonymous") else None,
+                orchestrator=orchestrator
+            )
+            
+            if not result:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to process message"
+                )
+        
+        ai_response = result["ai_response"]
+        session = result["session"]
+        
+        response_data = {
+            "message": ai_response.get("content", ""),
+            "updated_context": session.get("trip_context", {}),
+            "suggestions": ai_response.get("metadata", {}).get("suggestions", []),
+            "search_triggered": False,
+            "conflicts": [],
+            "chat_history": session.get("conversation_history", [])
+        }
+        
+        # Include hints and other metadata
+        if "metadata" in ai_response:
+            metadata = ai_response["metadata"]
+            if "hints" in metadata:
+                response_data["hints"] = metadata["hints"]
+            if "conversation_state" in metadata:
+                response_data["conversation_state"] = metadata["conversation_state"]
+            if "extracted_entities" in metadata:
+                response_data["extracted_entities"] = metadata["extracted_entities"]
+            if "next_steps" in metadata:
+                response_data["next_steps"] = metadata["next_steps"]
+        
         return create_success_response(
-            data={
-                "message": response_data.get("response_message"),
-                "updated_context": response_data.get("updated_context"),
-                "suggestions": response_data.get("suggestions", []),
-                "search_triggered": response_data.get("search_triggered", False),
-                "conflicts": response_data.get("conflicts", []),
-                "chat_history": response_data.get("chat_history", [])
-            },
+            data=response_data,
             session_id=session_id
         )
         
@@ -281,19 +439,60 @@ async def get_travel_session(
     session_id = validate_session_id(session_id)
     
     try:
-        # Get session with optional inclusions
-        session_data = await travel_service.get_session_data(
+        # Get session
+        session = await travel_service.get_session(
             session_id=session_id,
-            user_id=user["id"],
-            include_history=include_history,
-            include_results=include_results
+            user_id=user.get("id") if user and not user.get("is_anonymous") else None
         )
         
-        if not session_data:
+        if not session:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Session not found"
             )
+        
+        # Eagerly load all attributes we need while in async context
+        # Access attributes within the async context to avoid lazy loading issues
+        session_id_str = str(session.session_id)
+        user_id = session.user_id
+        status = session.status
+        created_at = session.created_at
+        updated_at = session.updated_at
+        last_activity_at = session.last_activity_at
+        
+        session_dict = {
+            "session_id": session_id_str,
+            "user_id": user_id,
+            "status": status,
+            "created_at": created_at,
+            "updated_at": updated_at,
+            "last_activity_at": last_activity_at
+        }
+        
+        # Load JSONB fields - these might be lazy loaded
+        session_data_dict = {}
+        plan_data_dict = {}
+        metadata_dict = {}
+        
+        if session.session_data is not None:
+            session_data_dict = dict(session.session_data)
+        if session.plan_data is not None:
+            plan_data_dict = dict(session.plan_data)
+        if session.session_metadata is not None:
+            metadata_dict = dict(session.session_metadata)
+        
+        # Build final response
+        session_data = {
+            "session_id": session_dict["session_id"],
+            "user_id": session_dict["user_id"],
+            "status": session_dict["status"],
+            "session_data": session_data_dict,
+            "plan_data": plan_data_dict,
+            "session_metadata": metadata_dict,
+            "created_at": session_dict["created_at"].isoformat() if session_dict["created_at"] else None,
+            "updated_at": session_dict["updated_at"].isoformat() if session_dict["updated_at"] else None,
+            "last_activity_at": session_dict["last_activity_at"].isoformat() if session_dict["last_activity_at"] else None
+        }
         
         return create_success_response(
             data=session_data,
@@ -303,7 +502,8 @@ async def get_travel_session(
     except HTTPException:
         raise
     except Exception as e:
-        return create_error_response("INTERNAL_ERROR", "Failed to retrieve session")
+        logger.error(f"Error retrieving session {session_id}: {e}", exc_info=True)
+        return create_error_response("INTERNAL_ERROR", f"Failed to retrieve session: {str(e)}")
 
 
 @router.post("/sessions/{session_id}/search", response_model=BaseResponse)
@@ -344,31 +544,27 @@ async def trigger_search(
     session_id = validate_session_id(session_id)
     
     try:
-        # Verify session and get context
-        session = await travel_service.get_session(session_id, user["id"])
-        if not session:
+        # Execute search
+        search_results = await travel_service.search(
+            session_id=session_id,
+            request=request,
+            user_id=user.get("id") if user and not user.get("is_anonymous") else None
+        )
+        
+        if not search_results:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Session not found"
             )
         
-        # Execute searches
-        search_results = await travel_service.execute_search(
-            session_id=session_id,
-            search_types=request.search_types,
-            force_refresh=request.force_refresh,
-            filters=request.filters,
-            preferences=request.preferences
-        )
-        
         return create_success_response(
             data={
-                "results": search_results.get("results", {}),
-                "search_id": search_results.get("search_id"),
-                "cached": search_results.get("cached", False),
-                "errors": search_results.get("errors", []),
-                "context_used": search_results.get("context_used"),
-                "result_counts": search_results.get("result_counts", {})
+                "results": search_results.get("results", []),
+                "search_id": str(uuid.uuid4()),
+                "cached": False,
+                "errors": [],
+                "context_used": search_results.get("context_used", {}),
+                "result_counts": {"total": search_results.get("total_count", 0)}
             },
             session_id=session_id
         )
@@ -419,24 +615,26 @@ async def save_item_to_trip(
     session_id = validate_session_id(session_id)
     
     try:
-        # Save item to trip
-        save_result = await travel_service.save_item_to_trip(
+        # Save item
+        success = await travel_service.save_item(
             session_id=session_id,
-            user_id=user["id"],
-            item_type=request.item_type,
-            item_data=request.item_data,
-            assigned_day=request.assigned_day,
-            notes=request.notes,
-            priority=request.priority
+            request=request,
+            user_id=user.get("id") if user and not user.get("is_anonymous") else None
         )
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session not found"
+            )
         
         return create_success_response(
             data={
-                "item_id": save_result.get("item_id"),
-                "conflicts": save_result.get("conflicts", []),
-                "updated_plan": save_result.get("updated_plan"),
-                "suggestions": save_result.get("suggestions", []),
-                "total_items": save_result.get("total_items", 0)
+                "item_id": request.item_id,
+                "conflicts": [],
+                "updated_plan": {},
+                "suggestions": [],
+                "total_items": 1
             },
             session_id=session_id
         )
@@ -652,74 +850,16 @@ async def chat_stream(
     """
     session_id = validate_session_id(session_id)
     
-    # Verify session ownership
-    session = await travel_service.get_session(session_id, user["id"])
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found"
-        )
-    
     async def generate_stream():
         """Generate streaming response."""
         try:
-            # Add user message to history first
-            await travel_service.add_conversation_message(
+            # Simply use the streaming method from our implementation
+            async for chunk in travel_service.stream_chat(
                 session_id=session_id,
-                message_type="user",
-                content=request.message
-            )
-            
-            # Initialize response parts
-            full_response = ""
-            response_chunks = []
-            
-            # Process message with streaming
-            async for chunk in orchestrator.process_message_stream(
-                message=request.message,
-                session_id=session_id,
-                user_id=user["id"]
+                request=request,
+                user_id=user.get("id") if user and not user.get("is_anonymous") else None
             ):
-                if chunk.get("type") == "response":
-                    # Stream response text
-                    text = chunk.get("text", "")
-                    full_response += text
-                    yield f"data: {{\"type\": \"message\", \"content\": {json.dumps(text)}}}\n\n"
-                    
-                elif chunk.get("type") == "tool_use":
-                    # Notify about tool usage
-                    tool_info = chunk.get("tool_info", {})
-                    yield f"data: {{\"type\": \"tool_use\", \"tool\": {json.dumps(tool_info)}}}\n\n"
-                    
-                elif chunk.get("type") == "suggestions":
-                    # Send suggestions
-                    suggestions = chunk.get("suggestions", [])
-                    yield f"data: {{\"type\": \"suggestions\", \"suggestions\": {json.dumps(suggestions)}}}\n\n"
-                    
-                elif chunk.get("type") == "context_update":
-                    # Send context updates
-                    context = chunk.get("context", {})
-                    yield f"data: {{\"type\": \"context_update\", \"context\": {json.dumps(context)}}}\n\n"
-                    
-                elif chunk.get("type") == "error":
-                    # Send error
-                    error = chunk.get("error", "Unknown error")
-                    yield f"data: {{\"type\": \"error\", \"error\": {json.dumps(error)}}}\n\n"
-                    break
-                    
-                # Small delay to prevent overwhelming the client
-                await asyncio.sleep(0.01)
-            
-            # Save complete AI response to history
-            if full_response:
-                await travel_service.add_conversation_message(
-                    session_id=session_id,
-                    message_type="assistant",
-                    content=full_response
-                )
-            
-            # Send completion signal
-            yield f"data: {{\"type\": \"done\", \"message\": \"Stream complete\"}}\n\n"
+                yield chunk
             
         except Exception as e:
             # Send error event
@@ -733,5 +873,6 @@ async def chat_stream(
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",  # Disable nginx buffering
+            "Access-Control-Allow-Origin": "*",  # Allow CORS for SSE
         }
     )

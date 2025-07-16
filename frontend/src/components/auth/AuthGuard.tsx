@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { LoginModal } from './LoginModalSimple';
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -14,14 +14,15 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
   onAuthRequired 
 }) => {
   const { isAuthenticated, isLoading } = useAuth();
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      setShowLoginModal(true);
       onAuthRequired?.();
+      // Redirect to homepage
+      navigate('/');
     }
-  }, [isAuthenticated, isLoading, onAuthRequired]);
+  }, [isAuthenticated, isLoading, onAuthRequired, navigate]);
 
   if (isLoading) {
     return (
@@ -32,16 +33,8 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
   }
 
   if (!isAuthenticated) {
-    return (
-      <>
-        {fallback}
-        <LoginModal
-          isOpen={showLoginModal}
-          onClose={() => setShowLoginModal(false)}
-          onSuccess={() => setShowLoginModal(false)}
-        />
-      </>
-    );
+    // Return null or fallback while redirecting
+    return <>{fallback}</>;
   }
 
   return <>{children}</>;

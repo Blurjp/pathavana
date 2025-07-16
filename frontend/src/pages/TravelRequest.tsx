@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUnifiedSession } from '../hooks/useUnifiedSession';
 import { useSidebar } from '../contexts/SidebarContext';
 import { AuthGuard } from '../components/auth/AuthGuard';
@@ -8,6 +9,8 @@ import { ChatMessage, SearchResults } from '../types';
 import { formatDateTime, getRelativeTimeString } from '../utils/dateHelpers';
 
 const TravelRequest: React.FC = () => {
+  const navigate = useNavigate();
+  
   const {
     messages,
     isMessageLoading,
@@ -15,10 +18,30 @@ const TravelRequest: React.FC = () => {
     sendMessage,
     createNewSession,
     sessionId
-  } = useUnifiedSession();
+  } = useUnifiedSession(undefined, true); // Force new session on initial load only
 
   const { sidebarOpen } = useSidebar();
   const [currentSearchResults, setCurrentSearchResults] = useState<SearchResults | undefined>();
+
+  // Create a new session immediately on mount
+  useEffect(() => {
+    const initNewChat = async () => {
+      // Only create if we don't have a sessionId yet
+      if (!sessionId) {
+        console.log('Creating new chat session...');
+        const newSessionId = await createNewSession();
+        if (newSessionId) {
+          // Navigate to the new session URL
+          navigate(`/chat/${newSessionId}`, { replace: true });
+        }
+      } else {
+        // If we somehow have a sessionId, redirect to it
+        navigate(`/chat/${sessionId}`, { replace: true });
+      }
+    };
+    
+    initNewChat();
+  }, []); // Only run on mount
 
   // Extract search results from the latest assistant message
   useEffect(() => {
@@ -74,9 +97,12 @@ const TravelRequest: React.FC = () => {
           
           <div className="message-body">
             <div className="message-text">
-              {message.content.split('\n').map((line, index) => (
-                <p key={index}>{line}</p>
-              ))}
+              {message.content && typeof message.content === 'string' 
+                ? message.content.split('\n').map((line, index) => (
+                    <p key={index}>{line}</p>
+                  ))
+                : <p>{message.content || 'No content available'}</p>
+              }
             </div>
             
             {message.metadata?.suggestions && message.metadata.suggestions.length > 0 && (
@@ -215,6 +241,7 @@ const TravelRequest: React.FC = () => {
       <SearchResultsSidebar
         searchResults={currentSearchResults}
         isLoading={isMessageLoading}
+        sessionId={sessionId}
       />
     </div>
   );

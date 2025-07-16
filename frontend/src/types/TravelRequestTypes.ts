@@ -45,6 +45,40 @@ export interface ChatMessage {
   metadata?: ChatMessageMetadata;
 }
 
+// Chat response can be either from session creation or regular chat
+export type ChatResponse = ChatMessageResponse | SessionCreationResponse;
+
+export interface ChatMessageResponse {
+  message: string;
+  updated_context?: any;
+  suggestions?: string[];
+  search_triggered?: boolean;
+  conflicts?: any[];
+  chat_history?: ChatMessage[];
+  hints?: any[];
+  conversation_state?: string;
+  extracted_entities?: any[];
+  next_steps?: string[];
+  searchResults?: SearchResults;
+  context?: any;
+}
+
+export interface SessionCreationResponse {
+  session_id: string;
+  initial_response: string;
+  parsed_intent?: any;
+  suggestions?: string[];
+  trip_context?: any;
+  status?: string;
+  metadata?: {
+    suggestions?: string[];
+    hints?: any[];
+    conversation_state?: string;
+    extracted_entities?: any[];
+    next_steps?: string[];
+  };
+}
+
 export interface ChatMessageMetadata {
   searchResults?: SearchResults;
   suggestions?: string[];
@@ -198,19 +232,12 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
-export interface ChatResponse {
-  response: string;
-  searchResults?: SearchResults;
-  suggestions?: string[];
-  context?: any;
-  sessionId: string;
-}
 
 // UI state types
 export interface UIState {
   isLoading: boolean;
   sidebarOpen: boolean;
-  activeTab: 'flights' | 'hotels' | 'activities';
+  activeTab: 'flights' | 'hotels' | 'activities' | 'trip';
   selectedItems: SelectedItems;
 }
 

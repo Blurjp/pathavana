@@ -1,9 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { ChatMessage, ChatResponse, TravelContext } from '../types';
+import { ChatMessage, ChatResponse, TravelContext, SearchResults } from '../types';
 import { unifiedTravelApi } from '../services/unifiedTravelApi';
 import { apiClient } from '../services/api';
 import { v4 as uuidv4 } from 'uuid';
 import { saveMessageHistory, getMessageHistory } from '../utils/sessionStorage';
+import { useSearchTrigger } from './useSearchTrigger';
+import { useSidebar } from '../contexts/SidebarContext';
 
 interface UseChatManagerReturn {
   messages: ChatMessage[];
@@ -18,17 +20,44 @@ interface UseChatManagerReturn {
   editMessage: (messageId: string, newContent: string) => Promise<void>;
   getMessageHistory: () => ChatMessage[];
   syncWithServer: () => Promise<void>;
+  searchResults?: SearchResults;
+  isSearching: boolean;
 }
 
-export const useChatManager = (sessionId?: string): UseChatManagerReturn => {
+export const useChatManager = (sessionId?: string, onSessionCreated?: (sessionId: string) => void): UseChatManagerReturn => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResults | undefined>();
+  const [isSearching, setIsSearching] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const lastSyncRef = useRef<number>(Date.now());
+  
+  const { toggleSidebar, sidebarOpen, setActiveTab } = useSidebar();
+  
+  // Use a ref to always have the latest sessionId
+  const sessionIdRef = useRef<string | undefined>(sessionId);
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+  
+  // Initialize search trigger hook
+  const { processMessage: processSearchIntent } = useSearchTrigger({
+    sessionId,
+    onSearchTriggered: (intent) => {
+      console.log('Search triggered:', intent);
+      setIsSearching(true);
+    },
+    onSearchComplete: (results) => {
+      console.log('Search complete:', results);
+      setSearchResults(results);
+      setIsSearching(false);
+    },
+    autoTrigger: true
+  });
 
   // Load message history when sessionId changes
   useEffect(() => {
@@ -70,9 +99,14 @@ export const useChatManager = (sessionId?: string): UseChatManagerReturn => {
 
   const loadMessageHistory = async (sessionId: string) => {
     try {
+      console.log('Loading message history for session:', sessionId);
+      
       // First try to load from localStorage for instant display
       const localMessages = getMessageHistory(sessionId);
+      console.log('Local messages found:', localMessages.length);
+      console.log('Local messages:', localMessages);
       if (localMessages.length > 0) {
+        console.log('Setting messages from localStorage');
         setMessages(localMessages);
       }
 
@@ -80,6 +114,7 @@ export const useChatManager = (sessionId?: string): UseChatManagerReturn => {
       const response = await unifiedTravelApi.getSession(sessionId);
       if (response.success && response.data) {
         const serverMessages = response.data.messages || [];
+        console.log('Server messages found:', serverMessages.length);
         
         // Merge messages, preferring server data for conflicts
         const mergedMessages = mergeMessages(localMessages, serverMessages);
@@ -92,6 +127,7 @@ export const useChatManager = (sessionId?: string): UseChatManagerReturn => {
       console.error('Failed to load message history:', err);
       // Fall back to local messages if server fails
       const localMessages = getMessageHistory(sessionId);
+      console.log('Falling back to local messages:', localMessages.length);
       if (localMessages.length > 0) {
         setMessages(localMessages);
       }
@@ -120,6 +156,9 @@ export const useChatManager = (sessionId?: string): UseChatManagerReturn => {
     setIsLoading(true);
     setError(null);
     setStreamingMessage('');
+    
+    // Process the message for search intent
+    processSearchIntent(userMessage);
 
     try {
       abortControllerRef.current = new AbortController();
@@ -127,7 +166,10 @@ export const useChatManager = (sessionId?: string): UseChatManagerReturn => {
       // Check if streaming is supported
       const supportsStreaming = 'EventSource' in window;
       
-      if (supportsStreaming && sessionId) {
+      // Use the current sessionId from ref
+      const currentSessionId = sessionIdRef.current;
+      
+      if (supportsStreaming && currentSessionId) {
         // Use SSE for streaming responses
         setIsStreaming(true);
         const assistantMessageId = uuidv4();
@@ -142,7 +184,9 @@ export const useChatManager = (sessionId?: string): UseChatManagerReturn => {
         setMessages(prev => [...prev, assistantMessage]);
         
         // Create EventSource for streaming
-        const url = `${process.env.REACT_APP_API_BASE_URL}/api/travel/sessions/${sessionId}/chat/stream`;
+        // Use the same base URL as apiClient (configured in api.ts)
+        const baseUrl = apiClient.getBaseURL();
+        const url = `${baseUrl}/api/v1/travel/sessions/${currentSessionId}/chat/stream`;
         const eventSource = new EventSource(url);
         eventSourceRef.current = eventSource;
         
@@ -168,6 +212,22 @@ export const useChatManager = (sessionId?: string): UseChatManagerReturn => {
                 ? { ...msg, metadata: data.metadata }
                 : msg
             ));
+            
+            // Check for search results in metadata
+            if (data.metadata?.searchResults) {
+              setSearchResults(data.metadata.searchResults);
+              setIsSearching(false);
+              
+              // Process the message to handle search results display
+              const updatedMessage: ChatMessage = {
+                id: assistantMessageId,
+                type: 'assistant',
+                content: accumulatedContent,
+                timestamp: new Date().toISOString(),
+                metadata: data.metadata
+              };
+              processSearchIntent(updatedMessage);
+            }
           } else if (data.type === 'done') {
             setIsStreaming(false);
             setStreamingMessage('');
@@ -182,18 +242,18 @@ export const useChatManager = (sessionId?: string): UseChatManagerReturn => {
           eventSource.close();
           
           // Fall back to regular API call
-          sendMessageNonStreaming(content, sessionId);
+          sendMessageNonStreaming(content, currentSessionId);
         };
         
         // Send the actual message
-        await apiClient.post(`/api/travel/sessions/${sessionId}/chat`, {
+        await apiClient.post(`/api/v1/travel/sessions/${currentSessionId}/chat`, {
           message: content,
           stream: true
         });
         
       } else {
         // Fall back to non-streaming API
-        await sendMessageNonStreaming(content, sessionId);
+        await sendMessageNonStreaming(content, currentSessionId);
       }
       
       lastSyncRef.current = Date.now();
@@ -222,19 +282,42 @@ export const useChatManager = (sessionId?: string): UseChatManagerReturn => {
     const response = await unifiedTravelApi.sendChatMessage(content, sessionId);
 
     if (response.success && response.data) {
+      // Handle both session creation response (initial_response) and chat response (message)
+      const responseContent = 'message' in response.data 
+        ? response.data.message 
+        : (response.data as any).initial_response || 'How can I help you plan your trip?';
+      
       const assistantMessage: ChatMessage = {
         id: uuidv4(),
         type: 'assistant',
-        content: response.data.response,
+        content: responseContent,
         timestamp: new Date().toISOString(),
         metadata: {
-          searchResults: response.data.searchResults,
-          suggestions: response.data.suggestions,
-          context: response.data.context,
+          searchResults: 'searchResults' in response.data ? response.data.searchResults : undefined,
+          suggestions: response.data.suggestions || (response.data as any).metadata?.suggestions,
+          context: 'context' in response.data ? response.data.context : (response.data as any).trip_context,
         },
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+      
+      // Process assistant message for search results
+      processSearchIntent(assistantMessage);
+      
+      // Update search results if present
+      if (assistantMessage.metadata?.searchResults) {
+        setSearchResults(assistantMessage.metadata.searchResults);
+        setIsSearching(false);
+      }
+      
+      // If this was a session creation, notify parent component
+      if (!sessionId && 'session_id' in response.data) {
+        const newSessionId = (response.data as any).session_id;
+        console.log('New session created:', newSessionId);
+        if (onSessionCreated) {
+          onSessionCreated(newSessionId);
+        }
+      }
     } else {
       throw new Error(response.error || 'Failed to send message');
     }
@@ -345,6 +428,8 @@ export const useChatManager = (sessionId?: string): UseChatManagerReturn => {
     editMessage,
     getMessageHistory: getChatHistory,
     syncWithServer,
+    searchResults,
+    isSearching,
   };
 };
 

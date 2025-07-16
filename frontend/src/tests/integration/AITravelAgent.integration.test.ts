@@ -304,7 +304,7 @@ describe('AI Travel Agent Integration Tests', () => {
     it('should generate appropriate clarification questions', () => {
       const context = {
         state: ConversationState.GATHERING_REQUIREMENTS,
-        entities: [{ type: 'destination', value: 'Tokyo', confidence: 0.9, position: [0, 5] }],
+        entities: [{ type: 'destination' as const, value: 'Tokyo', confidence: 0.9, position: [0, 5] as [number, number] }],
         missingFields: ['dates'],
         lastIntent: null,
         clarificationNeeded: true

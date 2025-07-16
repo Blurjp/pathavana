@@ -274,11 +274,13 @@ export class TravelConversationalSearch implements ConversationalSearch {
       response += `   📍 ${data.location}\n`;
       
       // Highlight amenities matching preferences
-      const matchingAmenities = data.amenities.filter((amenity: string) => 
-        preferences.hotelChains?.includes(amenity)
-      );
-      if (matchingAmenities.length > 0) {
-        response += `   ✓ ${matchingAmenities.join(', ')}\n`;
+      if (data.amenities) {
+        const matchingAmenities = data.amenities.filter((amenity: string) => 
+          preferences.hotelChains?.includes(amenity)
+        );
+        if (matchingAmenities.length > 0) {
+          response += `   ✓ ${matchingAmenities.join(', ')}\n`;
+        }
       }
       
       if (data.reviewScore) {

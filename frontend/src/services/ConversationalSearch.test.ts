@@ -226,7 +226,7 @@ describe('TravelConversationalSearch', () => {
 
       expect(formatted).toContain('✈️ **Flights:**');
       expect(formatted).toContain('United');
-      expect(formatted).toContain('$350');
+      expect(formatted).toContain('USD 350');
       expect(formatted).toContain('Non-stop');
       expect(formatted).toContain('Direct flight for your comfort');
     });
@@ -254,7 +254,7 @@ describe('TravelConversationalSearch', () => {
 
       expect(formatted).toContain('🏨 **Hotels:**');
       expect(formatted).toContain('Grand Hotel');
-      expect(formatted).toContain('$200/night');
+      expect(formatted).toContain('USD 200/night');
       expect(formatted).toContain('⭐⭐⭐⭐');
       expect(formatted).toContain('Downtown NYC');
       expect(formatted).toContain('8.5/10 from 1250 reviews');
@@ -284,7 +284,7 @@ describe('TravelConversationalSearch', () => {
 
       expect(formatted).toContain('🎯 **Activities:**');
       expect(formatted).toContain('City Walking Tour');
-      expect(formatted).toContain('$50');
+      expect(formatted).toContain('USD 50');
       expect(formatted).toContain('Central Park');
       expect(formatted).toContain('3 hours');
       expect(formatted).toContain('4.5/5');

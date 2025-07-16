@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { getRequestHistory } from '../utils/sessionStorage';
+import '../styles/components/ChatInput.css';
 
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
@@ -242,18 +243,23 @@ const ChatInput: React.FC<ChatInputProps> = ({
   }, []);
 
   const selectSuggestion = useCallback((suggestion: string) => {
-    setMessage(suggestion);
+    // Directly send the suggestion instead of just populating the input
+    onSendMessage(suggestion);
+    
+    // Reset state
+    setMessage('');
     setShowSuggestions(false);
     setSelectedSuggestion(-1);
-    textareaRef.current?.focus();
     
-    // Move cursor to end
-    setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.setSelectionRange(suggestion.length, suggestion.length);
-      }
-    }, 0);
-  }, []);
+    // Add to command history
+    setCommandHistory(prev => [...prev, suggestion]);
+    setHistoryIndex(-1);
+    
+    // Clear typing indicator
+    if (onTyping) {
+      onTyping(false);
+    }
+  }, [onSendMessage, onTyping]);
 
   const quickPrompts = contextualSuggestions.length > 0 
     ? contextualSuggestions.slice(0, 3)
@@ -275,11 +281,19 @@ const ChatInput: React.FC<ChatInputProps> = ({
             <button
               key={index}
               onClick={() => {
-                setMessage(prompt);
-                textareaRef.current?.focus();
+                // Directly send the quick prompt
+                onSendMessage(prompt);
+                
+                // Add to command history
+                setCommandHistory(prev => [...prev, prompt]);
+                
+                // Clear typing indicator
+                if (onTyping) {
+                  onTyping(false);
+                }
               }}
               className="quick-prompt"
-              disabled={disabled}
+              disabled={disabled || isLoading}
               aria-label={`Quick prompt: ${prompt}`}
             >
               {prompt}

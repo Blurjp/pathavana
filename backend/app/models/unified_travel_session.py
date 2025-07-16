@@ -41,7 +41,7 @@ class UnifiedTravelSession(Base):
 
     # Primary identifiers
     session_id = Column(String(36), primary_key=True, server_default=text("gen_random_uuid()::text"))
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, nullable=True, index=True)  # Removed ForeignKey for now
     status = Column(String(20), default=SessionStatus.ACTIVE.value, nullable=False, index=True)
     
     # Flexible JSONB storage for all session data
@@ -55,7 +55,7 @@ class UnifiedTravelSession(Base):
     last_activity_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
     
     # Relationships
-    user = relationship("User", back_populates="travel_sessions")
+    # user = relationship("User")  # Removed to avoid circular dependency
     saved_items = relationship("UnifiedSavedItem", back_populates="session", cascade="all, delete-orphan")
     bookings = relationship("UnifiedSessionBooking", back_populates="session", cascade="all, delete-orphan")
 

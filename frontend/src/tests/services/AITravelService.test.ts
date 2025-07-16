@@ -73,12 +73,15 @@ describe('TravelAIService', () => {
         }
       };
 
-      mockedApiClient.post.mockResolvedValue(mockResponse);
+      mockedApiClient.post.mockResolvedValue({
+        success: true,
+        ...mockResponse
+      });
 
       const response = await aiService.processMessage(message, sessionId);
 
       expect(mockedApiClient.post).toHaveBeenCalledWith(
-        `/api/travel/sessions/${sessionId}/chat`,
+        `/api/v1/travel/sessions/${sessionId}/chat`,
         expect.objectContaining({
           message: 'Find flights to Tokyo',
           metadata: expect.objectContaining({
@@ -108,7 +111,10 @@ describe('TravelAIService', () => {
         }
       };
 
-      mockedApiClient.post.mockResolvedValue(mockResponse);
+      mockedApiClient.post.mockResolvedValue({
+        success: true,
+        ...mockResponse
+      });
 
       const response = await aiService.processMessage(message, sessionId);
 
@@ -133,7 +139,10 @@ describe('TravelAIService', () => {
         }
       };
 
-      mockedApiClient.post.mockResolvedValue(mockResponse);
+      mockedApiClient.post.mockResolvedValue({
+        success: true,
+        ...mockResponse
+      });
 
       const response = await aiService.processMessage(message, sessionId);
 
@@ -173,12 +182,12 @@ describe('TravelAIService', () => {
         clarificationNeeded: false
       };
 
-      mockedApiClient.put.mockResolvedValue({ data: { success: true } });
+      mockedApiClient.put.mockResolvedValue({ success: true, data: { success: true } });
 
       await aiService.updateContext(sessionId, context);
 
       expect(mockedApiClient.put).toHaveBeenCalledWith(
-        `/api/travel/sessions/${sessionId}/context`,
+        `/api/v1/travel/sessions/${sessionId}/context`,
         {
           context: {
             state: ConversationState.SEARCHING,
@@ -224,6 +233,7 @@ describe('TravelAIService', () => {
       };
 
       mockedApiClient.post.mockResolvedValue({
+        success: true,
         data: { success: true, planId: 'plan-123' }
       });
 
@@ -231,7 +241,7 @@ describe('TravelAIService', () => {
 
       expect(result.success).toBe(true);
       expect(mockedApiClient.post).toHaveBeenCalledWith(
-        '/api/travel/plan/items',
+        '/api/v1/travel/plan/items',
         action.payload
       );
     });
@@ -247,6 +257,7 @@ describe('TravelAIService', () => {
       };
 
       mockedApiClient.post.mockResolvedValue({
+        success: true,
         data: {
           hotels: [
             { id: 'hotel-1', name: 'Tokyo Grand Hotel' }
@@ -258,7 +269,7 @@ describe('TravelAIService', () => {
 
       expect(result.success).toBe(true);
       expect(mockedApiClient.post).toHaveBeenCalledWith(
-        '/api/travel/search',
+        '/api/v1/travel/search',
         expect.objectContaining({
           query: 'hotels in Tokyo',
           filters: { maxPrice: 200 }
@@ -278,6 +289,7 @@ describe('TravelAIService', () => {
       };
 
       mockedApiClient.post.mockResolvedValue({
+        success: true,
         data: { flights: [] }
       });
 
@@ -285,7 +297,7 @@ describe('TravelAIService', () => {
 
       expect(result.success).toBe(true);
       expect(mockedApiClient.post).toHaveBeenCalledWith(
-        '/api/travel/search',
+        '/api/v1/travel/search',
         expect.objectContaining({
           filters: expect.objectContaining({
             maxPrice: 800 // Should be refined to 80% of original
@@ -304,6 +316,7 @@ describe('TravelAIService', () => {
       };
 
       mockedApiClient.post.mockResolvedValue({
+        success: true,
         data: {
           success: true,
           bookingReferences: ['REF123'],
@@ -327,6 +340,7 @@ describe('TravelAIService', () => {
       };
 
       mockedApiClient.put.mockResolvedValue({
+        success: true,
         data: { success: true, updatedPlan: {} }
       });
 
@@ -334,7 +348,7 @@ describe('TravelAIService', () => {
 
       expect(result.success).toBe(true);
       expect(mockedApiClient.put).toHaveBeenCalledWith(
-        '/api/travel/plan/plan-123',
+        '/api/v1/travel/plan/plan-123',
         { removeItem: 'flight-1' }
       );
     });
@@ -350,6 +364,7 @@ describe('TravelAIService', () => {
       };
 
       mockedApiClient.get.mockResolvedValue({
+        success: true,
         data: {
           recommendations: [
             { id: 'act-1', name: 'Senso-ji Temple' }
@@ -361,7 +376,7 @@ describe('TravelAIService', () => {
 
       expect(result.success).toBe(true);
       expect(mockedApiClient.get).toHaveBeenCalledWith(
-        '/api/travel/recommendations',
+        '/api/v1/travel/recommendations',
         {
           params: {
             destination: 'Tokyo',
