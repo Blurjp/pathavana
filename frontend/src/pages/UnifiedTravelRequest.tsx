@@ -7,9 +7,12 @@ import ChatInput from '../components/ChatInput';
 import SearchResultsSidebar from '../components/SearchResultsSidebar';
 import InteractiveMap from '../components/InteractiveMap';
 import SearchProgress from '../components/search/SearchProgress';
+import SmartPrompts from '../components/SmartPrompts';
 import { ChatMessage, SearchResults, Location, ItineraryItem } from '../types';
 import { formatDateTime, getRelativeTimeString } from '../utils/dateHelpers';
 import '../styles/pages/UnifiedTravelRequest.css';
+import '../styles/components/DatePicker.css';
+import '../styles/components/SmartPrompts.css';
 
 const UnifiedTravelRequest: React.FC = () => {
   const { sessionId: urlSessionId } = useParams<{ sessionId: string }>();
@@ -44,6 +47,7 @@ const UnifiedTravelRequest: React.FC = () => {
   const [conflicts, setConflicts] = useState<string[]>([]);
   const [searchType, setSearchType] = useState<'flight' | 'hotel' | 'activity' | null>(null);
   const [searchMessageId, setSearchMessageId] = useState<string | null>(null);
+  const [tripPlanCreated, setTripPlanCreated] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   
@@ -101,6 +105,24 @@ const UnifiedTravelRequest: React.FC = () => {
     }
   }, [messages]);
   
+  // Check for trip plan creation 
+  useEffect(() => {
+    const latestAssistantMessage = [...messages]
+      .reverse()
+      .find(msg => msg.type === 'assistant' && msg.metadata?.trip_plan_created);
+    
+    if (latestAssistantMessage?.metadata?.trip_plan_created && !tripPlanCreated) {
+      setTripPlanCreated(true);
+      
+      // Auto-open sidebar to show trip plan
+      if (!sidebarOpen) {
+        toggleSidebar();
+      }
+      
+      console.log('Trip plan created:', latestAssistantMessage.metadata.trip_plan);
+    }
+  }, [messages, tripPlanCreated, sidebarOpen, toggleSidebar]);
+  
   // Track the latest user message that might trigger a search
   useEffect(() => {
     if (searchType && messages.length > 0) {
@@ -115,11 +137,61 @@ const UnifiedTravelRequest: React.FC = () => {
   const getContextualSuggestions = useCallback(() => {
     const suggestions: string[] = [];
     
-    if (!context?.currentRequest) {
+    // Check if we should show static prompts instead of AI suggestions
+    // Show static prompts if there are no user messages yet (only welcome message)
+    const userMessageCount = messages.filter(msg => msg.type === 'user').length;
+    
+    if (userMessageCount === 0) {
+      // Return static prompts on initial load (before any user interaction)
       return [
-        "I want to plan a trip to Paris",
-        "Find me flights to Tokyo next month",
-        "Show me hotels in New York for this weekend"
+        "Plan a weekend trip to Paris", 
+        "Find flights to Tokyo under $800",
+        "Hotels in New York for next month"
+      ];
+    }
+    
+    // Check if the last AI message has suggestions
+    if (messages.length > 0) {
+      const lastAIMessage = [...messages].reverse().find(msg => msg.type === 'assistant');
+      if (lastAIMessage?.metadata) {
+        // Prioritize suggestions from the AI response
+        const metadata = lastAIMessage.metadata as any;
+        
+        
+        // Check for various suggestion sources in order of priority
+        if (metadata.orchestrator_suggestions && Array.isArray(metadata.orchestrator_suggestions)) {
+          suggestions.push(...metadata.orchestrator_suggestions);
+        }
+        if (metadata.clarifying_questions && Array.isArray(metadata.clarifying_questions)) {
+          suggestions.push(...metadata.clarifying_questions);
+        }
+        if (metadata.suggestions && Array.isArray(metadata.suggestions)) {
+          suggestions.push(...metadata.suggestions);
+        }
+        if (metadata.hints && Array.isArray(metadata.hints)) {
+          // Convert hint objects to suggestion strings
+          metadata.hints.forEach((hint: any) => {
+            if (typeof hint === 'string') {
+              suggestions.push(hint);
+            } else if (hint.text) {
+              suggestions.push(hint.text);
+            }
+          });
+        }
+        
+        // Return early if we have AI-generated suggestions
+        if (suggestions.length > 0) {
+          return suggestions.slice(0, 5); // Limit to 5 suggestions
+        }
+      }
+    }
+    
+    // Fallback to static suggestions if no AI suggestions available
+    if (!context?.currentRequest && suggestions.length === 0) {
+      return [
+        "Plan a weekend trip to Paris", 
+        "Find flights to Tokyo under $800",
+        "Hotels in New York for next month"
       ];
     }
 
@@ -158,7 +230,7 @@ const UnifiedTravelRequest: React.FC = () => {
     }
     
     return suggestions.slice(0, 5);
-  }, [context, currentSearchResults]);
+  }, [context, currentSearchResults, messages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -442,61 +514,6 @@ const UnifiedTravelRequest: React.FC = () => {
   return (
     <div className={`unified-travel-request-page ${sidebarOpen ? 'sidebar-open' : ''}`}>
       <div className="chat-container">
-        {/* Chat header with context info */}
-        <div className="chat-header">
-          <div className="chat-title">
-            <h1>Trip Planning Session</h1>
-            {context?.currentRequest && (
-              <div className="current-context">
-                {context.currentRequest.destination && (
-                  <span className="context-item">
-                    📍 {context.currentRequest.destination}
-                  </span>
-                )}
-                {context.currentRequest.departureDate && (
-                  <span className="context-item">
-                    📅 {new Date(context.currentRequest.departureDate).toLocaleDateString()}
-                  </span>
-                )}
-                {context.currentRequest.travelers && (
-                  <span className="context-item">
-                    👥 {context.currentRequest.travelers} traveler{context.currentRequest.travelers !== 1 ? 's' : ''}
-                  </span>
-                )}
-                {context.currentRequest.budget && (
-                  <span className="context-item">
-                    💰 ${context.currentRequest.budget}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-          
-          <div className="chat-actions">
-            <button
-              onClick={() => setShowMap(!showMap)}
-              className={`btn-secondary ${showMap ? 'active' : ''}`}
-              disabled={mapLocations.length === 0}
-              title={mapLocations.length === 0 ? 'No locations to show' : 'Toggle map view'}
-            >
-              🗺️ Map
-            </button>
-            <button
-              onClick={syncWithServer}
-              className="btn-secondary"
-              title="Sync with server"
-            >
-              🔄 Sync
-            </button>
-            <button
-              onClick={handleNewChat}
-              className="btn-secondary"
-              disabled={isMessageLoading || isStreaming}
-            >
-              ➕ New Chat
-            </button>
-          </div>
-        </div>
 
         {/* Global map view */}
         {showMap && mapLocations.length > 0 && (
@@ -619,6 +636,14 @@ const UnifiedTravelRequest: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Smart prompts for date selection */}
+        <SmartPrompts
+          lastMessage={messages.length > 0 ? messages[messages.length - 1]?.content : ''}
+          metadata={messages.length > 0 ? messages[messages.length - 1]?.metadata : undefined}
+          onSendMessage={handleSendMessage}
+          disabled={isMessageLoading || isStreaming || !!messageError}
+        />
 
         {/* Chat input */}
         <div className="chat-input-container">

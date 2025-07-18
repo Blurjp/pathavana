@@ -16,7 +16,7 @@ from datetime import datetime
 from .core.config import settings
 from .core.database import init_db, close_db, get_db
 from .core.logging_config import setup_logging, get_logger
-from .api import travel_unified, bookings, data_compliance, auth_simple, auth_v2, config, travelers_v2
+from .api import travel_unified, bookings, data_compliance, auth_simple, auth_v2, config, travelers_v2, mock_data
 from .api.endpoints import user_profile, user_profile_debug
 from .middleware import (
     RateLimitMiddleware,
@@ -231,6 +231,13 @@ app.include_router(
     data_compliance.router,
     prefix=f"{settings.API_V1_STR}/compliance",
     tags=["data-compliance"]
+)
+
+# Mock data routes for testing
+app.include_router(
+    mock_data.router,
+    prefix=f"{settings.API_V1_STR}/mock",
+    tags=["mock"]
 )
 
 

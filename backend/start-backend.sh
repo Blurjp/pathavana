@@ -101,8 +101,8 @@ echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""
 
-# Run with uvicorn
-uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+# Run with uvicorn (with reduced logging verbosity)
+uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload --log-level warning
 
 echo ""
 echo "👋 Server stopped"

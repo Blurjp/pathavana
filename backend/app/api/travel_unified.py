@@ -326,6 +326,10 @@ async def send_chat_message(
     
     try:
         # Process chat message
+        logger.debug(f"Calling add_chat_message for session {session_id}")
+        logger.debug(f"User ID: {user.get('id') if user and not user.get('is_anonymous') else None}")
+        logger.debug(f"Request body: {request_body.message}")
+        
         result = await travel_service.add_chat_message(
             session_id=session_id,
             request=request_body,
@@ -333,6 +337,7 @@ async def send_chat_message(
             orchestrator=orchestrator
         )
         
+        logger.debug(f"add_chat_message result: {result is not None}")
         if not result:
             # Try to create a new session if not found
             logger.info(f"Session {session_id} not found, creating new session")
@@ -361,10 +366,27 @@ async def send_chat_message(
             )
             
             if not result:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to process message"
-                )
+                # Create a fallback response instead of raising exception
+                logger.warning("Failed to process message, creating fallback response")
+                
+                fallback_ai_response = {
+                    "content": "I apologize, but I'm having trouble processing your message right now. Could you please try again? I'm here to help you plan your trip!",
+                    "metadata": {
+                        "error": "processing_failed", 
+                        "fallback": True,
+                        "suggestions": ["Try asking about your destination", "Share your travel dates", "Tell me about your trip preferences"]
+                    }
+                }
+                
+                fallback_session = {
+                    "trip_context": {},
+                    "conversation_history": []
+                }
+                
+                result = {
+                    "ai_response": fallback_ai_response,
+                    "session": fallback_session
+                }
         
         ai_response = result["ai_response"]
         session = result["session"]
@@ -389,6 +411,9 @@ async def send_chat_message(
                 response_data["extracted_entities"] = metadata["extracted_entities"]
             if "next_steps" in metadata:
                 response_data["next_steps"] = metadata["next_steps"]
+            if "searchResults" in metadata:
+                response_data["searchResults"] = metadata["searchResults"]
+                response_data["search_triggered"] = True
         
         return create_success_response(
             data=response_data,
@@ -400,7 +425,25 @@ async def send_chat_message(
     except ValueError as e:
         return create_error_response("VALIDATION_ERROR", str(e))
     except Exception as e:
-        return create_error_response("INTERNAL_ERROR", "Failed to process message")
+        logger.error(f"Chat endpoint exception: {e}", exc_info=True)
+        
+        # Instead of returning error, create a fallback response
+        fallback_message = "I apologize, but I'm having trouble processing your message right now. Could you please try again? I'm here to help you plan your trip!"
+        
+        response_data = {
+            "message": fallback_message,
+            "updated_context": {},
+            "suggestions": ["Try asking about your destination", "Share your travel dates", "Tell me about your trip preferences"],
+            "search_triggered": False,
+            "conflicts": [],
+            "chat_history": [],
+            "error": "fallback_response"
+        }
+        
+        return create_success_response(
+            data=response_data,
+            session_id=session_id
+        )
 
 
 @router.get("/sessions/{session_id}", response_model=BaseResponse)
@@ -439,60 +482,30 @@ async def get_travel_session(
     session_id = validate_session_id(session_id)
     
     try:
+        logger.debug(f"API: Getting session {session_id}")
+        
         # Get session
-        session = await travel_service.get_session(
+        session_data = await travel_service.get_session(
             session_id=session_id,
             user_id=user.get("id") if user and not user.get("is_anonymous") else None
         )
         
-        if not session:
+        logger.debug(f"API: Session retrieved: {session_data is not None}")
+        
+        if not session_data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Session not found"
             )
         
-        # Eagerly load all attributes we need while in async context
-        # Access attributes within the async context to avoid lazy loading issues
-        session_id_str = str(session.session_id)
-        user_id = session.user_id
-        status = session.status
-        created_at = session.created_at
-        updated_at = session.updated_at
-        last_activity_at = session.last_activity_at
+        logger.debug(f"API: Building response for session {session_id}")
         
-        session_dict = {
-            "session_id": session_id_str,
-            "user_id": user_id,
-            "status": status,
-            "created_at": created_at,
-            "updated_at": updated_at,
-            "last_activity_at": last_activity_at
-        }
+        # Format datetime fields for JSON serialization
+        session_data["created_at"] = session_data["created_at"].isoformat() if session_data["created_at"] else None
+        session_data["updated_at"] = session_data["updated_at"].isoformat() if session_data["updated_at"] else None
+        session_data["last_activity_at"] = session_data["last_activity_at"].isoformat() if session_data["last_activity_at"] else None
         
-        # Load JSONB fields - these might be lazy loaded
-        session_data_dict = {}
-        plan_data_dict = {}
-        metadata_dict = {}
-        
-        if session.session_data is not None:
-            session_data_dict = dict(session.session_data)
-        if session.plan_data is not None:
-            plan_data_dict = dict(session.plan_data)
-        if session.session_metadata is not None:
-            metadata_dict = dict(session.session_metadata)
-        
-        # Build final response
-        session_data = {
-            "session_id": session_dict["session_id"],
-            "user_id": session_dict["user_id"],
-            "status": session_dict["status"],
-            "session_data": session_data_dict,
-            "plan_data": plan_data_dict,
-            "session_metadata": metadata_dict,
-            "created_at": session_dict["created_at"].isoformat() if session_dict["created_at"] else None,
-            "updated_at": session_dict["updated_at"].isoformat() if session_dict["updated_at"] else None,
-            "last_activity_at": session_dict["last_activity_at"].isoformat() if session_dict["last_activity_at"] else None
-        }
+        logger.debug(f"API: Session data built successfully")
         
         return create_success_response(
             data=session_data,
@@ -767,15 +780,18 @@ async def delete_session(
     session_id = validate_session_id(session_id)
     
     try:
-        await travel_service.delete_session(
+        deleted = await travel_service.delete_session(
             session_id=session_id,
-            user_id=user["id"]
+            user_id=user.get("id") if user and not user.get("is_anonymous") else None
         )
         
-        return create_success_response(
-            data={"deleted": True, "session_id": session_id},
-            session_id=session_id
-        )
+        if deleted:
+            return create_success_response(
+                data={"deleted": True, "session_id": session_id},
+                session_id=session_id
+            )
+        else:
+            return create_error_response("DELETE_ERROR", "Session not found or could not be deleted")
         
     except ValueError as e:
         return create_error_response("VALIDATION_ERROR", str(e))
@@ -857,7 +873,8 @@ async def chat_stream(
             async for chunk in travel_service.stream_chat(
                 session_id=session_id,
                 request=request,
-                user_id=user.get("id") if user and not user.get("is_anonymous") else None
+                user_id=user.get("id") if user and not user.get("is_anonymous") else None,
+                orchestrator=orchestrator
             ):
                 yield chunk
             

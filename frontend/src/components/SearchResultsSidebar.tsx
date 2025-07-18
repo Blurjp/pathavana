@@ -4,7 +4,7 @@ import { SearchResults, FlightOption, HotelOption, ActivityOption, ItineraryItem
 import FlightCard from './FlightCard';
 import HotelCard from './HotelCard';
 import ActivityCard from './ActivityCard';
-import TripPlanPanel from './TripPlanPanel';
+import EnhancedTripPlanPanel from './EnhancedTripPlanPanel';
 import '../styles/components/SearchResultsSidebar.css';
 
 interface SearchResultsSidebarProps {
@@ -543,7 +543,7 @@ const SearchResultsSidebar: React.FC<SearchResultsSidebarProps> = ({
       <div className="sidebar-content">
         {activeTab === 'trip' ? (
           sessionId ? (
-            <TripPlanPanel sessionId={sessionId} isOpen={true} />
+            <EnhancedTripPlanPanel sessionId={sessionId} isOpen={true} />
           ) : (
             <div className="empty-state">
               <p>No session available for trip planning</p>
@@ -575,16 +575,8 @@ const SearchResultsSidebar: React.FC<SearchResultsSidebarProps> = ({
                       flight={flight}
                       isSelected={selectedItems.flights.includes(flight.id)}
                       onSelect={() => toggleItemSelection('flights', flight.id)}
+                      onAddToTrip={() => handleAddToTrip('flight', flight)}
                     />
-                    {onAddToTrip && (
-                      <button
-                        onClick={() => handleAddToTrip('flight', flight)}
-                        className="add-to-trip-button"
-                        title="Add to trip"
-                      >
-                        ➕
-                      </button>
-                    )}
                   </div>
                 ))}
               </div>

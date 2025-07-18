@@ -126,9 +126,9 @@ class UnifiedOrchestrator:
         self.tools = self._create_tools()
         logger.debug(f"Created {len(self.tools)} tools")
         
-        # Create agent prompt
+        # Create agent prompt (will be updated with context later)
         logger.debug("Creating agent prompt...")
-        self.prompt = self._create_agent_prompt()
+        self.prompt = None  # Will be created with context during message processing
     
     def _create_tools(self) -> List[Tool]:
         """Create LangChain tools for the agent."""
@@ -137,69 +137,67 @@ class UnifiedOrchestrator:
         # Flight search tool
         tools.append(
             StructuredTool.from_function(
-                func=self._search_flights_wrapper,
+                coroutine=self._search_flights_wrapper,
                 name="search_flights",
-                description="Search for flights between cities. Input should include origin, destination, departure date, and optionally return date and number of travelers.",
-                args_schema=None,  # Will be inferred from function
-                coroutine=self._search_flights_wrapper
+                description="Search for flights between cities. Input should include origin, destination, departure date, and optionally return date and number of travelers."
             )
         )
         
         # Hotel search tool
         tools.append(
             StructuredTool.from_function(
-                func=self._search_hotels_wrapper,
+                coroutine=self._search_hotels_wrapper,
                 name="search_hotels",
-                description="Search for hotels in a city. Input should include city, check-in date, check-out date, and number of guests.",
-                coroutine=self._search_hotels_wrapper
+                description="Search for hotels in a city. Input should include city, check-in date, check-out date, and number of guests."
             )
         )
         
         # Activity search tool
         tools.append(
             StructuredTool.from_function(
-                func=self._search_activities_wrapper,
+                coroutine=self._search_activities_wrapper,
                 name="search_activities",
-                description="Search for activities and attractions in a destination. Input should include the city or location.",
-                coroutine=self._search_activities_wrapper
+                description="Search for activities and attractions in a destination. Input should include the city or location."
             )
         )
         
         # Destination information tool
         tools.append(
             StructuredTool.from_function(
-                func=self._get_destination_info_wrapper,
+                coroutine=self._get_destination_info_wrapper,
                 name="get_destination_info",
-                description="Get general information about a travel destination including weather, best time to visit, and travel tips.",
-                coroutine=self._get_destination_info_wrapper
+                description="Get general information about a travel destination including weather, best time to visit, and travel tips."
             )
         )
         
         # Trip context update tool
         tools.append(
             StructuredTool.from_function(
-                func=self._update_trip_context_wrapper,
+                coroutine=self._update_trip_context_wrapper,
                 name="update_trip_context",
-                description="Update the trip planning context with new information like dates, destinations, or traveler count.",
-                coroutine=self._update_trip_context_wrapper
+                description="Update the trip planning context with new information like dates, destinations, or traveler count."
             )
         )
         
         # Save to trip tool
         tools.append(
             StructuredTool.from_function(
-                func=self._save_to_trip_wrapper,
+                coroutine=self._save_to_trip_wrapper,
                 name="save_to_trip",
-                description="Save a flight, hotel, or activity to the user's trip plan.",
-                coroutine=self._save_to_trip_wrapper
+                description="Save a flight, hotel, or activity to the user's trip plan."
             )
         )
         
         return tools
     
-    def _create_agent_prompt(self) -> ChatPromptTemplate:
+    def _create_agent_prompt(self, context: Optional[Dict[str, Any]] = None) -> ChatPromptTemplate:
         """Create the prompt template for the agent."""
-        system_message = """You are Pathavana, an AI travel planning assistant. You help users plan trips, search for flights and hotels, and provide travel recommendations.
+        # Format context for display - escape curly braces for template
+        context_json = json.dumps(context, indent=2) if context else "No context available"
+        # Escape curly braces by doubling them
+        context_str = context_json.replace("{", "{{").replace("}", "}}")
+        
+        system_message = f"""You are Pathavana, an AI travel planning assistant. You help users plan trips, search for flights and hotels, and provide travel recommendations.
 
 You have access to the following tools:
 - search_flights: Search for flights between cities
@@ -210,7 +208,7 @@ You have access to the following tools:
 - save_to_trip: Save items to the user's trip
 
 Current trip context:
-{trip_context}
+{context_str}
 
 Guidelines:
 1. Be helpful, friendly, and knowledgeable about travel
@@ -229,9 +227,9 @@ Remember to:
 - Be transparent about any limitations"""
 
         return ChatPromptTemplate.from_messages([
-            SystemMessage(content=system_message),
+            ("system", system_message),
             MessagesPlaceholder(variable_name="chat_history"),
-            HumanMessage(content="{input}"),
+            ("human", "{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad")
         ])
     
@@ -324,8 +322,11 @@ Remember to:
             # Get session memory
             memory = self._get_session_memory(session_id)
             
+            # Create prompt with current context
+            prompt = self._create_agent_prompt(updated_context)
+            
             # Create agent executor
-            agent = create_openai_tools_agent(self.llm, self.tools, self.prompt)
+            agent = create_openai_tools_agent(self.llm, self.tools, prompt)
             agent_executor = AgentExecutor(
                 agent=agent,
                 tools=self.tools,
@@ -422,8 +423,7 @@ Remember to:
         """Execute agent without streaming."""
         try:
             result = await agent_executor.ainvoke({
-                "input": message,
-                "trip_context": json.dumps(context, indent=2)
+                "input": message
             })
             
             # Extract tools used
@@ -542,8 +542,11 @@ Remember to:
             response_queue = asyncio.Queue()
             callback = StreamingCallback(response_queue)
             
+            # Create prompt with current context
+            prompt = self._create_agent_prompt(updated_context)
+            
             # Create agent with streaming callback
-            agent = create_openai_tools_agent(self.llm, self.tools, self.prompt)
+            agent = create_openai_tools_agent(self.llm, self.tools, prompt)
             
             # Create custom executor with callback
             # Note: This is a simplified version. In production, you'd need
@@ -561,8 +564,7 @@ Remember to:
             async def run_agent():
                 try:
                     result = await agent_executor.ainvoke({
-                        "input": message,
-                        "trip_context": json.dumps(updated_context, indent=2)
+                        "input": message
                     })
                     await response_queue.put({"type": "complete", "result": result})
                 except Exception as e:

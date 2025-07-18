@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { saveMessageHistory, getMessageHistory } from '../utils/sessionStorage';
 import { useSearchTrigger } from './useSearchTrigger';
 import { useSidebar } from '../contexts/SidebarContext';
+import mockDataService from '../services/mockDataService';
 
 interface UseChatManagerReturn {
   messages: ChatMessage[];
@@ -134,7 +135,115 @@ export const useChatManager = (sessionId?: string, onSessionCreated?: (sessionId
     }
   };
 
+  const sendMessageNonStreaming = useCallback(async (content: string, sessionId?: string) => {
+    console.log('[useChatManager] sendMessageNonStreaming called with sessionId:', sessionId);
+    
+    try {
+      const response = await unifiedTravelApi.sendChatMessage(content, sessionId);
+      console.log('[useChatManager] API response:', response);
+
+      if (response.success && response.data) {
+      console.log('[useChatManager] Processing response.data:', response.data);
+      console.log('[useChatManager] Response data keys:', Object.keys(response.data || {}));
+      console.log('[useChatManager] Full response.data:', JSON.stringify(response.data, null, 2));
+      console.log('[useChatManager] Has message?', 'message' in response.data);
+      console.log('[useChatManager] Has initial_response?', 'initial_response' in response.data);
+      console.log('[useChatManager] initial_response value:', (response.data as any).initial_response);
+      console.log('[useChatManager] Checking nested data:', (response.data as any).data);
+      if ((response.data as any).data) {
+        console.log('[useChatManager] Nested data.initial_response:', (response.data as any).data.initial_response);
+      }
+      
+      // Handle both session creation response (initial_response) and chat response (message)
+      const responseContent = 'message' in response.data 
+        ? response.data.message 
+        : (response.data as any).initial_response || 'How can I help you plan your trip?';
+      
+      console.log('[useChatManager] Final responseContent:', responseContent);
+      
+      const assistantMessage: ChatMessage = {
+        id: uuidv4(),
+        type: 'assistant',
+        content: responseContent,
+        timestamp: new Date().toISOString(),
+        metadata: {
+          searchResults: (response.data as any).searchResults || (response.data as any).data?.searchResults || undefined,
+          suggestions: (response.data as any).suggestions || (response.data as any).metadata?.suggestions || (response.data as any).data?.suggestions,
+          orchestrator_suggestions: (response.data as any).metadata?.orchestrator_suggestions,
+          clarifying_questions: (response.data as any).clarifying_questions || (response.data as any).data?.clarifying_questions,
+          hints: (response.data as any).hints || (response.data as any).metadata?.hints || (response.data as any).data?.hints,
+          context: (response.data as any).context || (response.data as any).trip_context || (response.data as any).data?.updated_context,
+        },
+      };
+      
+
+      setMessages(prev => [...prev, assistantMessage]);
+      
+      // Process assistant message for search results
+      processSearchIntent(assistantMessage);
+      
+      // Update search results if present
+      if (assistantMessage.metadata?.searchResults) {
+        setSearchResults(assistantMessage.metadata.searchResults);
+        setIsSearching(false);
+      } else if (mockDataService.shouldUseMockData(responseContent)) {
+        // If the backend couldn't retrieve results, use mock data
+        console.log('[useChatManager] Backend returned no results, fetching mock data...');
+        
+        let searchType: 'flights' | 'hotels' | 'all' = 'all';
+        const lowerContent = content.toLowerCase();
+        if (lowerContent.includes('flight')) {
+          searchType = 'flights';
+        } else if (lowerContent.includes('hotel')) {
+          searchType = 'hotels';
+        }
+        
+        const mockResults = await mockDataService.getMockSearchResults(searchType);
+        if (mockResults) {
+          console.log('[useChatManager] Mock results fetched:', mockResults);
+          setSearchResults(mockResults);
+          setIsSearching(false);
+          
+          // Update the assistant message to include the mock results
+          const updatedMessage = {
+            ...assistantMessage,
+            metadata: {
+              ...assistantMessage.metadata,
+              searchResults: mockResults
+            }
+          };
+          
+          // Update the last message with mock results
+          setMessages(prev => {
+            const newMessages = [...prev];
+            newMessages[newMessages.length - 1] = updatedMessage;
+            return newMessages;
+          });
+        }
+      }
+      
+      // If this was a session creation, notify parent component
+      if (!sessionId && 'session_id' in response.data) {
+        const newSessionId = (response.data as any).session_id;
+        console.log('New session created:', newSessionId);
+        if (onSessionCreated) {
+          onSessionCreated(newSessionId);
+        }
+      }
+      } else {
+        console.error('[useChatManager] API response failed:', response);
+        throw new Error(response.error || 'Failed to send message');
+      }
+    } catch (error) {
+      console.error('[useChatManager] Error in sendMessageNonStreaming:', error);
+      throw error;
+    }
+  }, [onSessionCreated, processSearchIntent]);
+
   const sendMessage = useCallback(async (content: string) => {
+    console.log('[useChatManager] sendMessage called with:', content);
+    console.log('[useChatManager] isLoading:', isLoading, 'isStreaming:', isStreaming);
+    
     if (!content.trim() || isLoading || isStreaming) return;
 
     // Cancel any ongoing request
@@ -164,10 +273,12 @@ export const useChatManager = (sessionId?: string, onSessionCreated?: (sessionId
       abortControllerRef.current = new AbortController();
       
       // Check if streaming is supported
-      const supportsStreaming = 'EventSource' in window;
+      const supportsStreaming = false; // Disable streaming temporarily
       
       // Use the current sessionId from ref
       const currentSessionId = sessionIdRef.current;
+      
+      console.log('[useChatManager] supportsStreaming:', supportsStreaming, 'currentSessionId:', currentSessionId);
       
       if (supportsStreaming && currentSessionId) {
         // Use SSE for streaming responses
@@ -253,6 +364,7 @@ export const useChatManager = (sessionId?: string, onSessionCreated?: (sessionId
         
       } else {
         // Fall back to non-streaming API
+        console.log('[useChatManager] Using non-streaming API');
         await sendMessageNonStreaming(content, currentSessionId);
       }
       
@@ -276,52 +388,8 @@ export const useChatManager = (sessionId?: string, onSessionCreated?: (sessionId
       setIsStreaming(false);
       abortControllerRef.current = null;
     }
-  }, [sessionId, isLoading, isStreaming]);
+  }, [sessionId, isLoading, isStreaming, processSearchIntent, sendMessageNonStreaming]);
 
-  const sendMessageNonStreaming = async (content: string, sessionId?: string) => {
-    const response = await unifiedTravelApi.sendChatMessage(content, sessionId);
-
-    if (response.success && response.data) {
-      // Handle both session creation response (initial_response) and chat response (message)
-      const responseContent = 'message' in response.data 
-        ? response.data.message 
-        : (response.data as any).initial_response || 'How can I help you plan your trip?';
-      
-      const assistantMessage: ChatMessage = {
-        id: uuidv4(),
-        type: 'assistant',
-        content: responseContent,
-        timestamp: new Date().toISOString(),
-        metadata: {
-          searchResults: 'searchResults' in response.data ? response.data.searchResults : undefined,
-          suggestions: response.data.suggestions || (response.data as any).metadata?.suggestions,
-          context: 'context' in response.data ? response.data.context : (response.data as any).trip_context,
-        },
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
-      
-      // Process assistant message for search results
-      processSearchIntent(assistantMessage);
-      
-      // Update search results if present
-      if (assistantMessage.metadata?.searchResults) {
-        setSearchResults(assistantMessage.metadata.searchResults);
-        setIsSearching(false);
-      }
-      
-      // If this was a session creation, notify parent component
-      if (!sessionId && 'session_id' in response.data) {
-        const newSessionId = (response.data as any).session_id;
-        console.log('New session created:', newSessionId);
-        if (onSessionCreated) {
-          onSessionCreated(newSessionId);
-        }
-      }
-    } else {
-      throw new Error(response.error || 'Failed to send message');
-    }
-  };
 
   const resendMessage = useCallback(async (messageId: string) => {
     const message = messages.find(m => m.id === messageId);

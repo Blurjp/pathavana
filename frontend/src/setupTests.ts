@@ -22,6 +22,36 @@ configure({
   },
 });
 
+// Mock localStorage
+const localStorageMock = {
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+  clear: jest.fn(),
+  key: jest.fn(),
+  length: 0,
+};
+
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+  writable: true,
+});
+
+// Mock sessionStorage
+const sessionStorageMock = {
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+  clear: jest.fn(),
+  key: jest.fn(),
+  length: 0,
+};
+
+Object.defineProperty(window, 'sessionStorage', {
+  value: sessionStorageMock,
+  writable: true,
+});
+
 // Global test setup
 beforeAll(() => {
   // Start MSW server for API mocking
@@ -48,11 +78,17 @@ afterEach(() => {
   // Clear all mocks
   jest.clearAllMocks();
   
-  // Clear localStorage
-  localStorage.clear();
+  // Reset localStorage mock
+  localStorageMock.getItem.mockReset();
+  localStorageMock.setItem.mockReset();
+  localStorageMock.removeItem.mockReset();
+  localStorageMock.clear.mockReset();
   
-  // Clear sessionStorage
-  sessionStorage.clear();
+  // Reset sessionStorage mock
+  sessionStorageMock.getItem.mockReset();
+  sessionStorageMock.setItem.mockReset();
+  sessionStorageMock.removeItem.mockReset();
+  sessionStorageMock.clear.mockReset();
 });
 
 // Clean up after all tests

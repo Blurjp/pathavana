@@ -17,6 +17,7 @@
       "Bash(grep:*)",
       "Bash(node:*)",
       "Bash(npm:*)",
+      "Bash(npm test:*)",
       "Bash(rm:*)",
       "Bash(pip --version)",
       "Bash(conda list:*)",

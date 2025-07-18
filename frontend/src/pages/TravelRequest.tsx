@@ -136,23 +136,6 @@ const TravelRequest: React.FC = () => {
   return (
     <div className={`travel-request-page ${sidebarOpen ? 'sidebar-open' : ''}`}>
       <div className="chat-container">
-        {/* Chat header */}
-        <div className="chat-header">
-          <div className="chat-title">
-            <h1>Plan Your Trip</h1>
-            <p>Tell me where you'd like to go and I'll help you plan the perfect trip</p>
-          </div>
-          
-          <div className="chat-actions">
-            <button
-              onClick={handleNewChat}
-              className="btn-secondary"
-              disabled={isMessageLoading}
-            >
-              New Chat
-            </button>
-          </div>
-        </div>
 
         {/* Messages area */}
         <div className="messages-container">

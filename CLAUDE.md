@@ -92,7 +92,8 @@ describe('ComponentName', () => {
 2. Verify the test fails with the bug present
 3. Apply the fix
 4. Verify the test passes after the fix
-5. Include edge cases and related scenarios
+5. **MANDATORY: Run Selenium UI tests to verify the fix works in an actual browser**
+6. Include edge cases and related scenarios
 
 Example test structure for UI fixes:
 ```typescript
@@ -258,10 +259,31 @@ except Exception as e:
 - Test different states/props
 - Use React Testing Library
 
-### 4. E2E Tests (Optional)
+### 4. E2E Tests (MANDATORY for UI fixes)
 - Test critical user journeys
-- Run against staging environment
-- Use tools like Cypress or Playwright
+- Run against staging environment  
+- Use Selenium WebDriver for browser automation
+
+**Available Selenium UI Tests in this project:**
+```bash
+# Located in frontend/src/tests/e2e/
+- TripPlanCreationTest.js       # Test trip planning flow
+- ChatSearchTest.js             # Test chat functionality
+- SearchResultsTest.js          # Test search results display  
+- FlightHotelSearchTest.js      # Test flight and hotel search
+- QuickPromptsTest.js           # Test quick prompts UI
+- CompleteTripPlanFlowTest.js   # Test complete user journey
+```
+
+**How to run UI tests:**
+```bash
+cd frontend
+# Run specific UI test
+npm test -- --testPathPattern="TripPlanCreation" --watchAll=false
+
+# Run all E2E tests
+npm test -- --testPathPattern="e2e.*\.js$" --watchAll=false
+```
 
 ## Development Workflow
 
@@ -370,11 +392,53 @@ When fixing UI or integration issues:
      npm test -- --watchAll=false
      ```
    - Integration verification:
-     - Start backend: `./start-backedn.sh`
+     - Start backend: `./start-backend.sh`
      - Start frontend: `npm start`
      - Test the actual feature in the browser
 
-5. **Deep Root Cause Analysis**:
+5. **MANDATORY: Run Selenium UI Tests After Every UI Fix**:
+   **CRITICAL - BROWSER TESTING REQUIRED FOR ALL UI FIXES**
+   
+   After fixing ANY UI-related issue, you MUST run the Selenium UI tests to verify the fix works in an actual browser:
+   
+   ```bash
+   cd frontend
+   # Run specific UI test for the feature you fixed
+   npm test -- --testPathPattern="e2e.*\.js$" --testNamePattern="your-specific-test"
+   
+   # Or run all E2E tests
+   npm test -- --testPathPattern="e2e.*\.js$"
+   ```
+   
+   **Browser Testing Requirements**:
+   - Run the actual browser test that simulates user interactions
+   - Verify that the error messages like "Sorry, I encountered an error processing your message" are resolved
+   - Test the complete user flow (e.g., typing "I want to plan a trip to Paris", clicking send, seeing search results)
+   - Check that the UI elements render correctly and respond to user input
+   - Verify that the conversation state transitions work properly in the browser
+   - Test edge cases and error scenarios
+   
+   **Example UI Test Execution**:
+   ```bash
+   # Test trip planning flow
+   npm test -- --testPathPattern="TripPlanCreation" --watchAll=false
+   
+   # Test chat functionality
+   npm test -- --testPathPattern="ChatSearchTest" --watchAll=false
+   
+   # Test search results display
+   npm test -- --testPathPattern="SearchResultsTest" --watchAll=false
+   ```
+   
+   **UI Test Failure Protocol**:
+   - If the UI test fails, the fix is NOT complete
+   - Debug the issue by examining browser console logs
+   - Check network requests and responses
+   - Verify that the backend API is responding correctly
+   - Ensure the frontend state management is working
+   - Do NOT consider the fix complete until the browser test passes
+
+6. **Deep Root Cause Analysis**:
    - If a test fails, ask WHY 5 times:
      - Why did the test fail? → Missing property
      - Why is the property missing? → API response changed
@@ -383,7 +447,7 @@ When fixing UI or integration issues:
      - Why did the schema change? → New requirements
    - Fix at the appropriate level
 
-6. **Common UI Test Issues to Check**:
+7. **Common UI Test Issues to Check**:
    - Missing or incorrect mocks for API calls
    - Async operations not properly awaited
    - State updates not wrapped in act()
@@ -391,16 +455,91 @@ When fixing UI or integration issues:
    - Type mismatches between frontend and backend
    - Incorrect test data structure
 
-7. **Verification Checklist**:
+8. **Verification Checklist**:
    - [ ] All UI tests pass
    - [ ] Backend starts without errors
    - [ ] API endpoints return expected data
    - [ ] Frontend compiles without warnings
+   - [ ] **MANDATORY: Selenium UI tests pass**
    - [ ] Feature works in the browser
    - [ ] No console errors in browser
    - [ ] Data flows correctly through all layers
 
-**NEVER report a fix as complete without running BOTH UI and backend tests and verifying the feature works in the browser!**
+**NEVER report a fix as complete without running BOTH UI tests, backend tests, AND Selenium browser tests to verify the feature works in the actual browser!**
+
+### 6. Comprehensive Test Fixing Process
+When fixing failing tests, follow this systematic approach:
+
+1. **Initial Assessment**:
+   ```bash
+   # Run all tests to get baseline
+   npm test -- --watchAll=false 2>&1 | grep -E "Test Suites:|Tests:"
+   
+   # Get summary of failing tests
+   npm test -- --watchAll=false 2>&1 | grep -E "FAIL|●" | head -50
+   ```
+
+2. **Fix Tests by Category**:
+   - Start with unit tests (they're usually simpler)
+   - Move to integration tests
+   - Finally tackle E2E tests
+
+3. **Common Test Issues and Fixes**:
+   - **API Method Changes**: e.g., `sendMessage` → `sendChatMessage`
+     ```javascript
+     // Old: unifiedTravelApi.sendMessage('session-123', { message: 'text' })
+     // New: unifiedTravelApi.sendChatMessage('text', 'session-123')
+     ```
+   
+   - **Missing Context Providers**:
+     ```javascript
+     // Wrap components in required providers
+     rerender(
+       <SidebarProvider>
+         <ComponentToTest />
+       </SidebarProvider>
+     );
+     ```
+   
+   - **Mock Function Parameter Mismatches**:
+     ```javascript
+     // Ensure mocks pass correct parameters
+     onClick={() => onAddToTrip && onAddToTrip({
+       id: `type_${item.id}`,
+       type: 'type',
+       title: item.name,
+       price: item.price
+     })}
+     ```
+   
+   - **Async State Updates**:
+     ```javascript
+     // Use waitFor for async updates
+     await waitFor(() => {
+       expect(screen.getByText('Expected Text')).toBeInTheDocument();
+     });
+     ```
+
+4. **Test Execution Strategy**:
+   - Run specific test file first:
+     ```bash
+     npm test -- --watchAll=false --testPathPattern="filename"
+     ```
+   - After fixing, run all tests to check for regressions:
+     ```bash
+     npm test -- --watchAll=false
+     ```
+   - For debugging specific tests:
+     ```bash
+     npm test -- --watchAll=false --testNamePattern="test name"
+     ```
+
+5. **Verification Steps**:
+   - [ ] Test passes locally
+   - [ ] No new test failures introduced
+   - [ ] Related tests still pass
+   - [ ] No console errors or warnings
+   - [ ] Feature works in actual application
 
 ## Command Execution Guidelines
 

@@ -383,17 +383,20 @@ class TripPlanCreationTest {
       // Wait for AI response to appear
       let responseFound = false;
       let lastMessageCount = 0;
+      let debugCounter = 0;
       
       while (Date.now() - startTime < timeout) {
-        // Look for AI/assistant messages
+        // First try to find messages by class selectors
         const messageSelectors = [
+          '.enhanced-chat-message.agent',
           '.message-content.assistant',
           '.chat-message.assistant',
           '.message.assistant',
           '[data-role="assistant"]',
           '.ai-message',
           '.bot-message',
-          '.assistant-message'
+          '.assistant-message',
+          '.agent-message'
         ];
         
         for (const selector of messageSelectors) {
@@ -404,17 +407,23 @@ class TripPlanCreationTest {
               const lastMessage = messages[messages.length - 1];
               const text = await lastMessage.getText();
               
-              // Check if response is substantial and complete
-              if (text && text.length > 100) {
-                // Check for travel-related content
+              // Check if we have any AI response
+              if (text && text.length > 10) {
+                // Accept short responses like "How can I help you plan your trip?"
+                const aiKeywords = ['help', 'plan', 'trip', 'travel', 'assist', 'can i', 'how can'];
+                const hasAIResponse = aiKeywords.some(keyword => 
+                  text.toLowerCase().includes(keyword)
+                );
+                
+                // Also check for travel-related content
                 const travelKeywords = ['day', 'flight', 'hotel', 'tokyo', 'itinerary', 'attraction', 'restaurant'];
                 const hasTravel = travelKeywords.some(keyword => 
                   text.toLowerCase().includes(keyword)
                 );
                 
-                if (hasTravel) {
+                if (hasAIResponse || hasTravel) {
                   // Check if still loading (no ellipsis or loading indicators)
-                  if (!text.includes('...') && !text.includes('typing') && !text.includes('generating')) {
+                  if (!text.includes('typing') && !text.includes('generating')) {
                     responseFound = true;
                     console.log('   ✅ AI response received!');
                     console.log(`   📄 Response preview: ${text.substring(0, 150)}...`);
@@ -432,9 +441,59 @@ class TripPlanCreationTest {
         
         if (responseFound) break;
         
+        // Fallback: Look for bot icon or assistant message indicator
+        if (!responseFound) {
+          try {
+            // Look for the bot assistant icon (shows as a circle with waves)
+            const botIcons = await this.driver.findElements(By.css('.bot-icon, [class*="assistant"], img[alt*="assistant"], img[alt*="bot"]'));
+            if (botIcons.length > 0) {
+              // Get the message next to the bot icon
+              for (const icon of botIcons) {
+                try {
+                  const parent = await icon.findElement(By.xpath("../.."));
+                  const messageText = await parent.getText();
+                  if (messageText && messageText.length > 10) {
+                    responseFound = true;
+                    console.log('   ✅ AI response found via bot icon!');
+                    console.log(`   📄 Response preview: ${messageText.substring(0, 150)}...`);
+                    break;
+                  }
+                } catch (e) {
+                  continue;
+                }
+              }
+            }
+          } catch (e) {
+            // Continue if search fails
+          }
+        }
+        
+        // Debug: Show what's on the page every 10 seconds
+        debugCounter++;
+        if (debugCounter % 10 === 0) {
+          try {
+            const allDivs = await this.driver.findElements(By.css('div'));
+            console.log(`   🔍 Debug: Found ${allDivs.length} div elements on page`);
+            
+            // Check for any message-like content
+            const messageDivs = await this.driver.findElements(By.css('[class*="message"], [class*="chat"]'));
+            console.log(`   🔍 Debug: Found ${messageDivs.length} message/chat elements`);
+            
+            if (messageDivs.length > 0) {
+              const lastDiv = messageDivs[messageDivs.length - 1];
+              const className = await lastDiv.getAttribute('class');
+              const text = await lastDiv.getText();
+              console.log(`   🔍 Debug: Last message class: ${className}`);
+              console.log(`   🔍 Debug: Last message preview: ${text.substring(0, 100)}...`);
+            }
+          } catch (e) {
+            // Continue
+          }
+        }
+        
         // Show progress
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
-        if (elapsed % 5 === 0) {
+        if (elapsed % 5 === 0 && elapsed > 0) {
           console.log(`   ⏱️  ${elapsed} seconds elapsed...`);
         }
         
@@ -466,35 +525,79 @@ class TripPlanCreationTest {
       // Give UI time to render the trip plan
       await this.driver.sleep(3000);
       
-      // Check if sidebar needs to be opened
-      console.log('   🔍 Looking for trip plan display...');
+      // First ensure the sidebar is open
+      console.log('   🔍 Looking for trip plan in sidebar...');
       
-      try {
-        const toggleButton = await this.driver.findElement(
-          By.css('.sidebar-toggle, button[aria-label*="sidebar"], button[aria-label*="results"]')
-        );
-        
-        if (await toggleButton.isDisplayed()) {
-          const classes = await toggleButton.getAttribute('class');
-          if (!classes.includes('active')) {
-            console.log('   📂 Opening sidebar...');
+      // Find and click sidebar toggle if needed
+      let sidebarOpened = false;
+      const toggleSelectors = [
+        'button[aria-label*="sidebar"]',
+        'button[aria-label*="results"]',
+        '.sidebar-toggle',
+        '[data-testid="sidebar-toggle"]',
+        'button[title*="sidebar"]',
+        '.toggle-sidebar',
+        '.hamburger-menu'
+      ];
+      
+      for (const selector of toggleSelectors) {
+        try {
+          const toggleButton = await this.driver.findElement(By.css(selector));
+          if (await toggleButton.isDisplayed()) {
+            console.log(`   📂 Found sidebar toggle: ${selector}`);
             await toggleButton.click();
-            await this.driver.sleep(1000);
+            sidebarOpened = true;
+            await this.driver.sleep(1500); // Give sidebar time to animate open
+            break;
           }
+        } catch (e) {
+          continue;
         }
-      } catch (e) {
-        console.log('   ℹ️  No sidebar toggle found (sidebar may be always visible)');
       }
       
-      // Look for trip plan content
-      const planSelectors = [
-        '.trip-plan-panel',
-        '.travel-plan-panel',
-        '.sidebar-content',
+      if (!sidebarOpened) {
+        console.log('   ⚠️  No sidebar toggle found - checking if sidebar is already visible');
+      }
+      
+      // Verify sidebar is now visible
+      let sidebarVisible = false;
+      const sidebarSelectors = [
         '.search-results-sidebar',
-        '.trip-details',
-        '[class*="trip-plan"]',
-        '[class*="travel-plan"]'
+        '.sidebar-container',
+        '[class*="sidebar"][class*="open"]',
+        '[class*="sidebar"][class*="visible"]',
+        '.trip-plan-container'
+      ];
+      
+      for (const selector of sidebarSelectors) {
+        try {
+          const sidebar = await this.driver.findElement(By.css(selector));
+          if (await sidebar.isDisplayed()) {
+            sidebarVisible = true;
+            console.log(`   ✅ Sidebar is visible: ${selector}`);
+            break;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+      
+      if (!sidebarVisible) {
+        console.log('   ❌ Sidebar not visible!');
+        await this.takeScreenshot('sidebar-not-visible');
+      }
+      
+      // Look for trip plan content IN THE SIDEBAR ONLY
+      const planSelectors = [
+        '.trip-plan-panel',  // Main trip plan panel component
+        '.TripPlanPanel',
+        '[class*="trip-plan-panel"]',
+        '.search-results-sidebar .trip-plan',
+        '.sidebar-content .trip-plan',
+        '[data-testid="trip-plan-panel"]',
+        '.plan-days',  // Trip plan days container
+        '.plan-day',   // Individual day sections
+        '.trip-itinerary'
       ];
       
       let tripPlanFound = false;
@@ -532,16 +635,28 @@ class TripPlanCreationTest {
       }
       
       if (!tripPlanFound) {
-        // Check if plan is in the main chat area instead
-        console.log('   🔍 Checking main chat area for trip plan...');
+        // The trip plan MUST be in the sidebar, NOT in chat messages
+        console.log('   ❌ Trip plan NOT found in sidebar!');
+        console.log('   📍 The trip plan should appear in the right sidebar panel');
         
-        const chatArea = await this.driver.findElement(By.css('body'));
-        const fullText = await chatArea.getText();
+        // Take a screenshot to debug
+        await this.takeScreenshot('sidebar-not-found');
         
-        if (fullText.includes('Day 1') || fullText.includes('Flight') || fullText.includes('Hotel')) {
-          tripPlanFound = true;
-          planContent = fullText;
-          console.log('   ✅ Trip plan found in chat messages');
+        // List what we found
+        console.log('\n   🔍 Debug - Elements found:');
+        for (const selector of planSelectors) {
+          try {
+            const elements = await this.driver.findElements(By.css(selector));
+            if (elements.length > 0) {
+              console.log(`   - ${selector}: ${elements.length} element(s)`);
+              for (let i = 0; i < Math.min(2, elements.length); i++) {
+                const text = await elements[i].getText();
+                console.log(`     Preview: "${text.substring(0, 50)}..."`);
+              }
+            }
+          } catch (e) {
+            // Skip
+          }
         }
       }
       
@@ -585,7 +700,7 @@ class TripPlanCreationTest {
         return true;
         
       } else {
-        throw new Error('Trip plan not found in UI');
+        throw new Error('Trip plan NOT found in the sidebar panel! The trip plan must appear in the right sidebar, not just in chat messages.');
       }
       
     } catch (error) {

@@ -76,24 +76,30 @@ export const useConversationState = (sessionId: string): ConversationStateHook =
       newMessage.metadata.intent = intent;
       newMessage.metadata.entities = entities;
 
-      // Update context based on new message
-      setContext(prevContext => {
-        const updatedMessages = [...messages, newMessage];
-        const newContext = nluEngine.maintainContext(updatedMessages);
+      // Update messages first
+      setMessages(prev => {
+        const updatedMessages = [...prev, newMessage];
         
-        // Determine next conversation state
-        const nextState = determineNextState(intent, newContext, conversationState);
-        setConversationState(nextState);
+        // Update context based on new message
+        setContext(prevContext => {
+          const newContext = nluEngine.maintainContext(updatedMessages);
+          
+          // Determine next conversation state
+          const nextState = determineNextState(intent, newContext, conversationState);
+          setConversationState(nextState);
+          
+          return {
+            ...newContext,
+            state: nextState
+          };
+        });
         
-        return {
-          ...newContext,
-          state: nextState
-        };
+        return updatedMessages;
       });
+    } else {
+      setMessages(prev => [...prev, newMessage]);
     }
-
-    setMessages(prev => [...prev, newMessage]);
-  }, [messages, nluEngine, conversationState]);
+  }, [nluEngine, conversationState]);
 
   const updateContext = useCallback((updates: Partial<ConversationContext>) => {
     setContext(prev => ({ ...prev, ...updates }));
@@ -194,6 +200,7 @@ function determineNextState(
   switch (intent.type) {
     case 'search_flight':
     case 'search_hotel':
+      // Check if we have all required fields for the search
       if (context.missingFields.length > 0) {
         return ConversationState.GATHERING_REQUIREMENTS;
       }

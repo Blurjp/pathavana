@@ -18,7 +18,7 @@ export class UnifiedTravelApi {
     message: string, 
     sessionId?: string
   ): Promise<ApiResponse<ChatResponse>> {
-    if (sessionId) {
+    if (sessionId && sessionId.trim()) {
       // Send to existing session
       return apiClient.post(`${this.baseUrl}/sessions/${sessionId}/chat`, {
         message,

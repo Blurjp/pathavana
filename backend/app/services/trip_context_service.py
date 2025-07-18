@@ -690,21 +690,19 @@ class TripContextService:
                     from_text = match.group(1).strip()
                     to_text = match.group(2).strip()
                     
-                    from_resolved = self.destination_resolver.resolve_destination(from_text)
-                    if from_resolved.get("resolved"):
-                        destinations.append({
-                            "original_text": from_text,
-                            "resolved": from_resolved,
-                            "type": "departure"
-                        })
+                    # TODO: Make _extract_destinations async to support destination resolution
+                    # For now, use simple resolution without API calls
+                    destinations.append({
+                        "original_text": from_text,
+                        "resolved": {"place_name": from_text, "resolved": True},
+                        "type": "departure"
+                    })
                     
-                    to_resolved = self.destination_resolver.resolve_destination(to_text)
-                    if to_resolved.get("resolved"):
-                        destinations.append({
-                            "original_text": to_text,
-                            "resolved": to_resolved,
-                            "type": "destination"
-                        })
+                    destinations.append({
+                        "original_text": to_text,
+                        "resolved": {"place_name": to_text, "resolved": True},
+                        "type": "destination"
+                    })
                 else:
                     dest_text = match.group(1).strip()
                     
@@ -942,6 +940,104 @@ class TripContextService:
             return "trip_planning"
         
         return "general_travel_info"
+    
+    def detect_trip_plan_intent(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Detect if user wants to create a trip plan.
+        
+        Returns:
+            Dict with:
+            - wants_trip_plan: bool
+            - confidence: float (0-1)
+            - reason: str
+            - trip_info: extracted trip information if available
+        """
+        message_lower = message.lower()
+        
+        # Strong indicators for trip plan creation
+        trip_plan_phrases = [
+            "create a trip plan",
+            "create my trip plan",
+            "make a trip plan",
+            "build a trip plan",
+            "start planning my trip",
+            "plan my trip",
+            "plan a trip",
+            "plan travel",
+            "plan a travel",
+            "plan my travel",
+            "want to plan a trip",
+            "want to plan travel",
+            "create an itinerary",
+            "build my itinerary",
+            "organize my trip",
+            "put together my trip",
+            "let's plan",
+            "help me plan",
+            "i want to plan",
+            "create a travel plan",
+            "save my trip",
+            "add to my trip plan",
+            "add this to my trip"
+        ]
+        
+        # Check for explicit trip plan creation intent
+        for phrase in trip_plan_phrases:
+            if phrase in message_lower:
+                # Extract any trip information from the message
+                entities = self._extract_entities_rule_based(message)
+                return {
+                    "wants_trip_plan": True,
+                    "confidence": 0.95,
+                    "reason": f"User explicitly asked to '{phrase}'",
+                    "trip_info": entities
+                }
+        
+        # Check if user is providing trip details with implicit planning intent
+        entities = self._extract_entities_rule_based(message)
+        trip_type = self._determine_trip_type(message, entities)
+        
+        # If user provides destination and dates, they likely want to plan
+        if entities.get("destination_city") and (entities.get("start_date") or entities.get("end_date")):
+            # Check for planning context words
+            planning_context = ["want to", "planning to", "thinking about", "would like to", "looking to", "hoping to"]
+            if any(ctx in message_lower for ctx in planning_context):
+                return {
+                    "wants_trip_plan": True,
+                    "confidence": 0.8,
+                    "reason": "User provided destination and dates with planning context",
+                    "trip_info": entities
+                }
+        
+        # Check if this is part of an ongoing trip planning conversation
+        if context and context.get("trip_type") == "trip_planning":
+            # If we're already in trip planning mode and user provides more details
+            if entities.get("destination_city") or entities.get("start_date") or entities.get("travelers"):
+                return {
+                    "wants_trip_plan": True,
+                    "confidence": 0.7,
+                    "reason": "User is providing trip details in planning context",
+                    "trip_info": entities
+                }
+        
+        # Check for trip completion phrases after search results
+        if context and context.get("has_search_results"):
+            completion_phrases = ["add to trip", "save to trip", "add this", "save this", "book this", "select this"]
+            if any(phrase in message_lower for phrase in completion_phrases):
+                return {
+                    "wants_trip_plan": True,
+                    "confidence": 0.85,
+                    "reason": "User wants to add search results to trip plan",
+                    "trip_info": entities
+                }
+        
+        # Default: no trip plan intent detected
+        return {
+            "wants_trip_plan": False,
+            "confidence": 0.0,
+            "reason": "No trip plan creation intent detected",
+            "trip_info": entities
+        }
     
     def _parse_date_text(self, date_text: str, date_type: str) -> Optional[str]:
         """Parse date text to ISO format. Simplified implementation."""

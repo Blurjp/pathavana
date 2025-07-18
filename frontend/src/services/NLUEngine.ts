@@ -21,32 +21,38 @@ export class TravelNLUEngine implements NLUEngine {
     const patterns = new Map<string, RegExp[]>();
     
     patterns.set('search_flight', [
-      /\b(find|search|look for|show me|book|get me|find me)\s+(a\s+)?flights?\b/i,
+      /\b(find|search|look for|show me|get me|find me)\s+(a\s+)?flights?\b/i,
+      /\bbook\s+(a\s+)?flights?\b/i,
       /\bfly(ing)?\s+(to|from)\b/i,
       /\bflight\s+(to|from|between)\b/i,
       /\bairfare\s+(to|from)\b/i,
-      /\bwant\s+to\s+fly\b/i
+      /\bwant\s+to\s+fly\b/i,
+      /\bbook\s+(a\s+)?flight\s+(to|from)\b/i
     ]);
 
     patterns.set('search_hotel', [
-      /\b(find|search|look for|show me|book|get me)\s+(a\s+)?hotels?\b/i,
+      /\b(find|search|look for|show me|get me)\s+(a\s+)?hotels?\b/i,
+      /\bbook\s+(a\s+)?hotels?\b/i,
       /\b(stay|accommodation|lodging|where to stay)\b/i,
       /\bhotel\s+(in|near|at)\b/i,
-      /\bneed\s+(a\s+)?place\s+to\s+stay\b/i
+      /\bneed\s+(a\s+)?place\s+to\s+stay\b/i,
+      /\bbook\s+(a\s+)?hotel\s+(in|near|at|for)\b/i
     ]);
 
     patterns.set('add_to_plan', [
-      /\b(add|include|put|save)\s+(this|that|it)?\s*(to|in)?\s*(my\s+)?plan\b/i,
+      /\b(add|include|put|save)\s+(this|that|it|the)?\s*(flight|hotel|activity)?\s*(to|in)?\s*(my\s+)?(plan|trip|itinerary)\b/i,
       /\b(I'll take|select|choose|want)\s+(this|that|it)\b/i,
-      /\badd\s+to\s+(my\s+)?itinerary\b/i,
-      /\bsave\s+for\s+later\b/i
+      /\badd\s+to\s+(my\s+)?(itinerary|trip)\b/i,
+      /\bsave\s+(this|that|it)?\s*(for\s+)?later\b/i,
+      /\badd\s+(this|that|the)\s+(flight|hotel|activity)\s+to\s+my\s+(plan|trip|itinerary)\b/i
     ]);
 
     patterns.set('view_plan', [
       /\b(show|view|see|display|check)\s+(me\s+)?(my\s+)?(travel\s+)?plan\b/i,
-      /\bwhat's\s+in\s+my\s+(plan|itinerary)\b/i,
-      /\bmy\s+trip\s+so\s+far\b/i,
-      /\bcurrent\s+(plan|itinerary)\b/i
+      /\bwhat('s|\s+is)\s+in\s+my\s+(plan|itinerary)\b/i,
+      /\b(my\s+)?trip\s+so\s+far\b/i,
+      /\b(view|check|display)\s+(my\s+)?current\s+(plan|itinerary)\b/i,
+      /\b(display|show)\s+(my\s+)?bookings?\b/i
     ]);
 
     patterns.set('modify_plan', [
@@ -57,21 +63,26 @@ export class TravelNLUEngine implements NLUEngine {
     ]);
 
     patterns.set('book_item', [
-      /\b(book|reserve|confirm|finalize|purchase)\s+(this|that|it|now)\b/i,
+      /\b(book|reserve|confirm|finalize|purchase)\s+(this|that|it|these)\s*(now|tickets)?\b/i,
       /\bproceed\s+with\s+(booking|reservation)\b/i,
       /\bconfirm\s+(my\s+)?(booking|reservation)\b/i,
-      /\bready\s+to\s+book\b/i
+      /\b(I'm\s+)?ready\s+to\s+book\b/i,
+      /\bpurchase\s+these\s+tickets\b/i,
+      /\bbook\s+this\s+now\b/i
     ]);
 
     patterns.set('get_recommendations', [
       /\b(recommend|suggest|what should|where should)\b/i,
       /\b(best|top|popular)\s+(places|things|activities|restaurants)\b/i,
-      /\bwhat\s+(to do|can I do|is there to do)\b/i,
-      /\bmust[- ]see\b/i
+      /\bwhat\s+(to\s+do|can\s+I\s+do|is\s+there\s+to\s+do)\b/i,
+      /\bwhat\s+should\s+I\s+do\s+in\b/i,
+      /\bmust[- ]see\b/i,
+      /\bwhat('s|\s+is)\s+popular\b/i
     ]);
 
     patterns.set('check_budget', [
-      /\b(budget|cost|price|how much|total|expense)\b/i,
+      /\b(budget|cost|price|how\s+much|total|expenses?)\b/i,
+      /\bhow\s+much\s+will\s+this\s+cost\b/i,
       /\bcan\s+I\s+afford\b/i,
       /\bwithin\s+my\s+budget\b/i,
       /\bspending\s+so\s+far\b/i
@@ -84,11 +95,14 @@ export class TravelNLUEngine implements NLUEngine {
     const patterns = new Map<string, RegExp[]>();
     
     patterns.set('destination', [
-      /\bto\s+([A-Z][a-zA-Z\s-]+?)(?:\s+(?:and|,|\.|$))/gi,
-      /\bin\s+([A-Z][a-zA-Z\s-]+?)(?:\s+(?:and|,|\.|$))/gi,
-      /\bvisit\s+([A-Z][a-zA-Z\s-]+?)(?:\s+(?:and|,|\.|$))/gi,
-      /\bgoing\s+to\s+([A-Z][a-zA-Z\s-]+?)(?:\s+(?:and|,|\.|$))/gi,
-      /\b([A-Z][a-zA-Z\s-]+?)\s+(?:trip|vacation|holiday)/gi
+      /(?:fly|travel|go)\s+to\s+([A-Z][a-zA-Z\s-]+?)(?=\s+(?:for|on|in|and|,|\.|$))/gi,
+      /\bflights?\s+to\s+([A-Z][a-zA-Z\s-]+?)(?=\s+(?:for|on|in|and|,|\.|$))/gi,
+      /\bvisit\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)(?=\s+|$)/gi,
+      /\bin\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)(?=\s+(?:for|on|and|,|\.|$))/gi,
+      /\bgoing\s+to\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)(?=\s+(?:for|on|and|,|\.|$))/gi,
+      /\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)\s+(?:trip|vacation|holiday)/gi,
+      /\b([A-Z][a-zA-Z]+)\s+to\s+([A-Z][a-zA-Z]+)/g,
+      /\b(?:flying|traveling)\s+to\s+([A-Z][a-zA-Z]+)/gi
     ]);
 
     patterns.set('date', [
@@ -96,7 +110,9 @@ export class TravelNLUEngine implements NLUEngine {
       /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(,?\s+\d{4})?\b/gi,
       /\b(tomorrow|today|next\s+week|next\s+month|this\s+weekend)\b/gi,
       /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi,
-      /\breturning\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})/gi
+      /\bon\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})/gi,
+      /\breturning\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})/gi,
+      /\b(march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})\b/gi
     ]);
 
     patterns.set('budget', [
@@ -129,15 +145,26 @@ export class TravelNLUEngine implements NLUEngine {
     let detectedIntent: string | null = null;
     const parameters: Record<string, any> = {};
 
-    // Check each intent pattern
-    for (const [intentType, patterns] of this.intentPatterns) {
+
+    // Priority order for intent checking (more specific first)
+    const priorityOrder = ['add_to_plan', 'book_item', 'modify_plan', 'view_plan', 'check_budget', 'get_recommendations', 'search_flight', 'search_hotel'];
+    
+    // Check intents in priority order
+    for (const intentType of priorityOrder) {
+      const patterns = this.intentPatterns.get(intentType);
+      if (!patterns) continue;
+      
       for (const pattern of patterns) {
         // Reset regex lastIndex
         pattern.lastIndex = 0;
         if (pattern.test(normalizedMessage)) {
           const confidence = this.calculateConfidence(normalizedMessage, pattern);
-          if (confidence > highestConfidence) {
-            highestConfidence = confidence;
+          // Give bonus confidence to more specific intents
+          const adjustedConfidence = intentType === 'add_to_plan' || intentType === 'book_item' ? confidence + 0.1 : confidence;
+          
+          
+          if (adjustedConfidence > highestConfidence) {
+            highestConfidence = adjustedConfidence;
             detectedIntent = intentType;
           }
         }
@@ -147,20 +174,22 @@ export class TravelNLUEngine implements NLUEngine {
     }
 
     // Default to search_flight if no clear intent but mentions travel-related keywords
-    if (!detectedIntent && /\b(travel|trip|vacation|holiday|visit)\b/i.test(message)) {
+    if (!detectedIntent && /\b(travel|vacation|holiday|visit)\b/i.test(message)) {
       detectedIntent = 'search_flight';
       highestConfidence = 0.3;
     }
-
+    
+    
     return {
       type: (detectedIntent || 'search_flight') as any,
-      confidence: highestConfidence || 0.5,
+      confidence: highestConfidence || 0.6,
       parameters
     };
   }
 
   extractEntities(message: string): Entity[] {
     const entities: Entity[] = [];
+    
     
     for (const [entityType, patterns] of this.entityPatterns) {
       for (const pattern of patterns) {
@@ -169,32 +198,70 @@ export class TravelNLUEngine implements NLUEngine {
         const matches = message.matchAll(new RegExp(pattern.source, pattern.flags));
         
         for (const match of matches) {
-          // For dates, we might have multiple capture groups
-          let capturedValue = match[1];
-          if (entityType === 'date' && match[2]) {
-            capturedValue = `${match[1]} ${match[2]}`;
-          }
-          if (entityType === 'date' && match[3]) {
-            capturedValue = `${capturedValue}${match[3]}`;
-          }
-          
-          if (capturedValue || match[0]) {
-            const rawValue = capturedValue || match[0];
-            const value = this.normalizeEntityValue(entityType, rawValue);
-            if (value !== null && value !== undefined) {
-              entities.push({
+          // Handle different capture group scenarios
+          if (entityType === 'destination' && match[1] && match[2]) {
+            // Pattern with two capture groups (e.g., "Tokyo to Kyoto")
+            const firstDestination = this.normalizeEntityValue(entityType, match[1]);
+            const secondDestination = this.normalizeEntityValue(entityType, match[2]);
+            
+            if (firstDestination !== null && firstDestination !== undefined) {
+              const entity1: Entity = {
                 type: entityType as any,
-                value,
+                value: firstDestination,
                 confidence: 0.8,
-                position: [match.index || 0, (match.index || 0) + match[0].length]
-              });
+                position: [match.index || 0, (match.index || 0) + match[1].length] as [number, number]
+              };
+              
+              
+              entities.push(entity1);
+            }
+            
+            if (secondDestination !== null && secondDestination !== undefined) {
+              const secondStart = (match.index || 0) + match[0].indexOf(match[2]);
+              const entity2: Entity = {
+                type: entityType as any,
+                value: secondDestination,
+                confidence: 0.8,
+                position: [secondStart, secondStart + match[2].length] as [number, number]
+              };
+              
+              
+              entities.push(entity2);
+            }
+          } else {
+            // Standard single capture group or date handling
+            let capturedValue = match[1];
+            if (entityType === 'date' && match[2]) {
+              capturedValue = `${match[1]} ${match[2]}`;
+            }
+            if (entityType === 'date' && match[3]) {
+              capturedValue = `${capturedValue}${match[3]}`;
+            }
+            
+            if (capturedValue || match[0]) {
+              const rawValue = capturedValue || match[0];
+              const value = this.normalizeEntityValue(entityType, rawValue);
+              if (value !== null && value !== undefined) {
+                const entity: Entity = {
+                  type: entityType as any,
+                  value,
+                  confidence: 0.8,
+                  position: [match.index || 0, (match.index || 0) + match[0].length] as [number, number]
+                };
+                
+                
+                entities.push(entity);
+              }
             }
           }
         }
       }
     }
 
-    return this.deduplicateEntities(entities);
+    const deduplicated = this.deduplicateEntities(entities);
+    
+    
+    return deduplicated;
   }
 
   maintainContext(messages: EnhancedChatMessage[]): ConversationContext {
@@ -257,6 +324,7 @@ export class TravelNLUEngine implements NLUEngine {
 
   private calculateConfidence(message: string, pattern: RegExp): number {
     // Simple confidence calculation based on pattern match strength
+    pattern.lastIndex = 0;
     const match = message.match(pattern);
     if (!match) return 0;
     
@@ -264,10 +332,10 @@ export class TravelNLUEngine implements NLUEngine {
     if (match.index === 0) return 0.9;
     
     // Medium confidence for matches in the middle
-    if (match.index && match.index < message.length / 2) return 0.7;
+    if (match.index && match.index < message.length / 2) return 0.75;
     
     // Lower confidence for matches at the end
-    return 0.5;
+    return 0.6;
   }
 
   private normalizeEntityValue(entityType: string, value: string): any {
@@ -303,13 +371,51 @@ export class TravelNLUEngine implements NLUEngine {
   }
 
   private deduplicateEntities(entities: Entity[]): Entity[] {
-    const seen = new Set<string>();
-    return entities.filter(entity => {
-      const key = `${entity.type}:${entity.value}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    const result: Entity[] = [];
+    
+    for (const entity of entities) {
+      let shouldAdd = true;
+      
+      // Check against existing entities
+      for (let i = 0; i < result.length; i++) {
+        const existing = result[i];
+        
+        // If same type and value, skip
+        if (existing.type === entity.type && existing.value === entity.value) {
+          shouldAdd = false;
+          break;
+        }
+        
+        // If same type and overlapping positions, keep the more specific one
+        if (existing.type === entity.type) {
+          const existingStart = existing.position[0];
+          const existingEnd = existing.position[1];
+          const entityStart = entity.position[0];
+          const entityEnd = entity.position[1];
+          
+          // Check if they overlap
+          if (!(entityEnd <= existingStart || entityStart >= existingEnd)) {
+            // They overlap, keep the more specific (longer) one
+            if (entityEnd - entityStart > existingEnd - existingStart) {
+              // New entity is more specific, replace the existing one
+              result[i] = entity;
+              shouldAdd = false;
+              break;
+            } else {
+              // Existing entity is more specific, skip the new one
+              shouldAdd = false;
+              break;
+            }
+          }
+        }
+      }
+      
+      if (shouldAdd) {
+        result.push(entity);
+      }
+    }
+    
+    return result;
   }
 
   private determineConversationState(messages: EnhancedChatMessage[]): ConversationState {

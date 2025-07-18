@@ -382,17 +382,24 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             "/api/health",
             "/favicon.ico"
         ]
+        # Path prefixes to skip logging for
+        self.skip_logging_prefixes = [
+            "/api/v1/travel/sessions/"
+        ]
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Log request and response details."""
         start_time = time.time()
         
         # Check if we should skip logging for this path
-        skip_logging = any(request.url.path == path for path in self.skip_logging_paths)
+        skip_logging = (
+            any(request.url.path == path for path in self.skip_logging_paths) or
+            any(request.url.path.startswith(prefix) for prefix in self.skip_logging_prefixes)
+        )
         
         # Log request (if not skipped)
         if not skip_logging:
-            logger.info(
+            logger.debug(
                 f"Request: {request.method} {request.url.path} "
                 f"from {request.client.host if request.client else 'unknown'}"
             )
@@ -405,7 +412,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         
         # Log response (if not skipped)
         if not skip_logging:
-            logger.info(
+            logger.debug(
                 f"Response: {response.status_code} for {request.method} {request.url.path} "
                 f"({process_time:.3f}s)"
             )

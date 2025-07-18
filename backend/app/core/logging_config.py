@@ -116,8 +116,8 @@ def setup_logging(log_dir: str = "logs", log_level: str = "INFO") -> None:
                 "propagate": False
             },
             "uvicorn.access": {
-                "level": "INFO",
-                "handlers": ["console", "file_access"],
+                "level": "WARNING",
+                "handlers": ["file_access"],
                 "propagate": False,
                 "filters": ["noise_filter"]
             },

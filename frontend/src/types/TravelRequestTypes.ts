@@ -82,8 +82,28 @@ export interface SessionCreationResponse {
 export interface ChatMessageMetadata {
   searchResults?: SearchResults;
   suggestions?: string[];
+  orchestrator_suggestions?: string[];
+  clarifying_questions?: string[];
+  hints?: any[];
   actionRequired?: boolean;
   context?: any;
+  trip_plan_created?: boolean;
+  trip_plan?: {
+    id: string;
+    name: string;
+    destination: string;
+    departure_date?: string;
+    return_date?: string;
+    travelers?: number;
+    status?: string;
+    saved_items?: any[];
+  };
+  trip_plan_intent?: {
+    wants_trip_plan: boolean;
+    confidence: number;
+    reason: string;
+    trip_info?: any;
+  };
 }
 
 // Search results types
@@ -230,6 +250,7 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
   message?: string;
+  metadata?: any;
 }
 
 

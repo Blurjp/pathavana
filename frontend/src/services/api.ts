@@ -63,6 +63,16 @@ class ApiClient {
   async get<T>(url: string, params?: any): Promise<ApiResponse<T>> {
     try {
       const response = await this.client.get(url, { params });
+      // If the backend response has our standard structure, unwrap it
+      if (response.data && typeof response.data === 'object' && 'success' in response.data && 'data' in response.data) {
+        return {
+          success: response.data.success,
+          data: response.data.data,
+          error: response.data.error,
+          metadata: response.data.metadata,
+        };
+      }
+      // Otherwise return as is
       return {
         success: true,
         data: response.data,
@@ -78,6 +88,16 @@ class ApiClient {
   async post<T>(url: string, data?: any, config?: any): Promise<ApiResponse<T>> {
     try {
       const response = await this.client.post(url, data, config);
+      // If the backend response has our standard structure, unwrap it
+      if (response.data && typeof response.data === 'object' && 'success' in response.data && 'data' in response.data) {
+        return {
+          success: response.data.success,
+          data: response.data.data,
+          error: response.data.error,
+          metadata: response.data.metadata,
+        };
+      }
+      // Otherwise return as is
       return {
         success: true,
         data: response.data,
@@ -93,6 +113,16 @@ class ApiClient {
   async put<T>(url: string, data?: any): Promise<ApiResponse<T>> {
     try {
       const response = await this.client.put(url, data);
+      // If the backend response has our standard structure, unwrap it
+      if (response.data && typeof response.data === 'object' && 'success' in response.data && 'data' in response.data) {
+        return {
+          success: response.data.success,
+          data: response.data.data,
+          error: response.data.error,
+          metadata: response.data.metadata,
+        };
+      }
+      // Otherwise return as is
       return {
         success: true,
         data: response.data,
@@ -108,6 +138,16 @@ class ApiClient {
   async delete<T>(url: string): Promise<ApiResponse<T>> {
     try {
       const response = await this.client.delete(url);
+      // If the backend response has our standard structure, unwrap it
+      if (response.data && typeof response.data === 'object' && 'success' in response.data && 'data' in response.data) {
+        return {
+          success: response.data.success,
+          data: response.data.data,
+          error: response.data.error,
+          metadata: response.data.metadata,
+        };
+      }
+      // Otherwise return as is
       return {
         success: true,
         data: response.data,

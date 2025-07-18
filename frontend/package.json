@@ -32,6 +32,7 @@
     "test:trip-plan-full": "node runTripPlanTest.js",
     "test:simple": "node src/tests/e2e/SimpleTripPlanTest.js",
     "test:v2": "node src/tests/e2e/TripPlanTestV2.js",
+    "test:trip-plan-v2": "node src/tests/e2e/TripPlanCreationTestV2.js",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
